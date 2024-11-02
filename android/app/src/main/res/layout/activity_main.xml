@@ -20,18 +20,30 @@
         android:id="@+id/receive"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="158dp"
+        android:layout_marginTop="21dp"
+        android:layout_marginEnd="157dp"
+        android:layout_marginBottom="14dp"
         android:text="Receive"
-        tools:layout_editor_absoluteX="158dp"
-        tools:layout_editor_absoluteY="396dp"
+        app:layout_constraintBottom_toTopOf="@+id/messageField"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/sample_text"
         tools:ignore="MissingConstraints" />
 
     <Button
         android:id="@+id/send"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="160dp"
+        android:layout_marginTop="24dp"
+        android:layout_marginEnd="163dp"
+        android:layout_marginBottom="148dp"
         android:text="Send"
-        tools:layout_editor_absoluteX="160dp"
-        tools:layout_editor_absoluteY="535dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/messageField"
         tools:ignore="MissingConstraints" />
 
     <com.google.android.material.textfield.TextInputLayout
@@ -48,9 +60,13 @@
         android:id="@+id/messageField"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:layout_marginBottom="31dp"
         android:hint="hint"
-        tools:layout_editor_absoluteX="1dp"
-        tools:layout_editor_absoluteY="458dp"
+        app:layout_constraintBottom_toTopOf="@+id/send"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/receive"
         tools:ignore="MissingConstraints" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

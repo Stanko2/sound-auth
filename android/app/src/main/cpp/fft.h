@@ -80,6 +80,9 @@ Appendix :
     w[] and ip[] are compatible with all routines.
 */
 
+void cft1st(int n, float *a, const float *w);
+void cftmdl(int n, int l, float *a, const float *w);
+
 void rdft(int n, int isgn, float *a, int *ip, float *w)
 {
     void makewt(int nw, int *ip, float *w);
@@ -88,7 +91,7 @@ void rdft(int n, int isgn, float *a, int *ip, float *w)
     void cftfsub(int n, float *a, float *w);
     void cftbsub(int n, float *a, float *w);
     void rftfsub(int n, float *a, int nc, float *c);
-    void rftbsub(int n, float *a, int nc, float *c);
+    void rftbsub(int n, float *a, int nc, const float *c);
     int nw, nc;
     float xi;
 
@@ -140,7 +143,7 @@ void makewt(int nw, int *ip, float *w)
     ip[1] = 1;
     if (nw > 2) {
         nwh = nw >> 1;
-        delta = atan(1.0) / nwh;
+        delta = atan(1.0f) / nwh;
         w[0] = 1;
         w[1] = 0;
         w[nwh] = cos(delta * nwh);
@@ -168,12 +171,12 @@ void makect(int nc, int *ip, float *c)
     ip[1] = nc;
     if (nc > 1) {
         nch = nc >> 1;
-        delta = atan(1.0) / nch;
+        delta = atan(1.0f) / nch;
         c[0] = cos(delta * nch);
-        c[nch] = 0.5 * c[0];
+        c[nch] = 0.5f * c[0];
         for (j = 1; j < nch; j++) {
-            c[j] = 0.5 * cos(delta * j);
-            c[nc - j] = 0.5 * sin(delta * j);
+            c[j] = 0.5f * cos(delta * j);
+            c[nc - j] = 0.5f * sin(delta * j);
         }
     }
 }
@@ -391,10 +394,9 @@ void bitrv2conj(int n, int *ip, float *a)
 }
 
 
+
 void cftfsub(int n, float *a, float *w)
 {
-    void cft1st(int n, float *a, float *w);
-    void cftmdl(int n, int l, float *a, float *w);
     int j, j1, j2, j3, l;
     float x0r, x0i, x1r, x1i, x2r, x2i, x3r, x3i;
 
@@ -445,8 +447,6 @@ void cftfsub(int n, float *a, float *w)
 
 void cftbsub(int n, float *a, float *w)
 {
-    void cft1st(int n, float *a, float *w);
-    void cftmdl(int n, int l, float *a, float *w);
     int j, j1, j2, j3, l;
     float x0r, x0i, x1r, x1i, x2r, x2i, x3r, x3i;
 
@@ -495,7 +495,7 @@ void cftbsub(int n, float *a, float *w)
 }
 
 
-void cft1st(int n, float *a, float *w)
+void cft1st(int n, float *a, const float *w)
 {
     int j, k1, k2;
     float wk1r, wk1i, wk2r, wk2i, wk3r, wk3i;
@@ -600,7 +600,7 @@ void cft1st(int n, float *a, float *w)
 }
 
 
-void cftmdl(int n, int l, float *a, float *w)
+void cftmdl(int n, int l, float *a, const float *w)
 {
     int j, j1, j2, j3, k, k1, k2, m, m2;
     float wk1r, wk1i, wk2r, wk2i, wk3r, wk3i;
@@ -752,7 +752,7 @@ void rftfsub(int n, float *a, int nc, float *c)
 }
 
 
-void rftbsub(int n, float *a, int nc, float *c)
+void rftbsub(int n, float *a, int nc, const float *c)
 {
     int j, k, kk, ks, m;
     float wkr, wki, xr, xi, yr, yi;

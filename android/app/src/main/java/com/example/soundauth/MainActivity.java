@@ -2,17 +2,16 @@ package com.example.soundauth;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.widget.TextView;
 
 import com.example.soundauth.databinding.ActivityMainBinding;
 
+import java.util.List;
+
 public class MainActivity extends AppCompatActivity {
 
-    // Used to load the 'soundauth' library on application startup.
-    static {
-        System.loadLibrary("soundAuth");
-    }
 
     private ActivityMainBinding binding;
 
@@ -25,12 +24,12 @@ public class MainActivity extends AppCompatActivity {
 
         // Example of a call to a native method
         TextView tv = binding.sampleText;
-        tv.setText(stringFromJNI());
+//        tv.setText(stringFromJNI());
+        binding.send.setOnClickListener((e)-> {
+            Intent i = new Intent(this, ListenService.class);
+            i.putExtra("message", binding.messageField.getText().toString());
+            startService(i);
+        });
     }
 
-    /**
-     * A native method that is implemented by the 'soundauth' native library,
-     * which is packaged with this application.
-     */
-    public native String stringFromJNI();
 }
