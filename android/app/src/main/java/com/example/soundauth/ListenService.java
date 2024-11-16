@@ -22,7 +22,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 
 public class ListenService extends Service {
-    private static String TAG = "ListenService";
+    private static final String TAG = "ListenService";
 
     // Used to load the 'soundauth' library on application startup.
     static {
@@ -34,7 +34,6 @@ public class ListenService extends Service {
     private int bufferSize = 500000;
     private Context context;
     private AudioTrack output;
-    private int outChannel = AudioFormat.CHANNEL_OUT_MONO;
 
     @Override
     public void onCreate() {
@@ -56,37 +55,32 @@ public class ListenService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         initGGwave(sample_rate, bufferSize);
-        bufferSize = AudioTrack.getMinBufferSize((int)sample_rate, outChannel, AudioFormat.ENCODING_PCM_8BIT);
+        int outChannel = AudioFormat.CHANNEL_OUT_MONO;
+        bufferSize = AudioTrack.getMinBufferSize((int) sample_rate, outChannel, AudioFormat.ENCODING_PCM_16BIT);
         bufferSize *= 2;
         Log.d(TAG, "onStartCommand: bufferSize " + bufferSize);
-        output = new AudioTrack.Builder().setAudioAttributes(
-                new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build()
-            ).setAudioFormat(new AudioFormat.Builder().
-                setEncoding(AudioFormat.ENCODING_PCM_8BIT)
-                        .setSampleRate((int)sample_rate)
-                        .setChannelMask(outChannel).build())
-                .setBufferSizeInBytes(bufferSize).setTransferMode(AudioTrack.MODE_STREAM).build();
+        output = new AudioTrack.Builder().setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build())
+                .setAudioFormat(new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate((int) sample_rate).setChannelMask(outChannel).build()).setBufferSizeInBytes(bufferSize)
+                .setTransferMode(AudioTrack.MODE_STREAM).build();
         Log.d(TAG, "Sample rate: " + output.getSampleRate());
         String message = intent.getStringExtra("message");
         assert message != null;
+
         playMessage(message.getBytes(StandardCharsets.UTF_8));
-
-        try {
-            output.play();
-            output.pause();
-        } catch (Exception e) {
-            Log.e(TAG, "AudioTrack play/pause test failed: " + e.getMessage());
-        }
-
 
         return Service.START_STICKY;
     }
 
     public void playMessage(byte[] message) {
         byte[] audio = encode(message, message.length);
-        Log.d(TAG, "playMessage: generated " + audio.length);
-        new Thread(()->{
+        int max = 0;
+        for (byte b : audio) {
+            max = Math.max(max, b);
+        }
+        Log.d(TAG, "playMessage: generated " + audio.length + " max: " + max);
+
+
+        new Thread(() -> {
             try {
                 int offset = 0;
                 output.play();
@@ -103,6 +97,16 @@ public class ListenService extends Service {
                 Log.e(TAG, "playMessage: ", e);
             }
         }).start();
+    }
+
+    public void listen() throws SecurityException {
+        var bufferSize = AudioRecord.getMinBufferSize((int)sample_rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_8BIT);
+
+        var audio = new AudioRecord.Builder().setAudioFormat(new AudioFormat.Builder().setSampleRate((int)sample_rate).setEncoding(AudioFormat.ENCODING_PCM_8BIT).setChannelMask(AudioFormat.CHANNEL_IN_MONO).build())
+                .setBufferSizeInBytes(bufferSize).setAudioSource(MediaRecorder.AudioSource.MIC).build();
+
+
+
     }
 
     @Override
