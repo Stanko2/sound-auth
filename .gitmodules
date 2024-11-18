@@ -1,0 +1,6 @@
+[submodule "linux/external/external/ggwave"]
+	path = linux/external/external/ggwave
+	url = https://github.com/ggerganov/ggwave.git
+[submodule "linux/external/ggwave"]
+	path = linux/external/ggwave
+	url = https://github.com/ggerganov/ggwave.git

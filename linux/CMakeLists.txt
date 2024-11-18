@@ -11,6 +11,8 @@ include_directories(${PIPEWIRE_INCLUDE_DIRS})
 
 add_executable(sound-auth main.cpp)
 
-target_link_libraries(sound-auth ${PIPEWIRE_LIBRARIES})
+add_subdirectory(external/ggwave)
+
+target_link_libraries(sound-auth ${PIPEWIRE_LIBRARIES} ggwave)
 
 target_compile_options(sound-auth PRIVATE ${PIPEWIRE_CFLAGS_OTHER})
