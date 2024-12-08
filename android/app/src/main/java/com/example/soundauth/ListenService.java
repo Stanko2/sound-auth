@@ -12,6 +12,7 @@ import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.IBinder;
+import android.os.Process;
 import android.provider.MediaStore;
 import android.util.Log;
 
@@ -19,7 +20,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 public class ListenService extends Service {
     private static final String TAG = "ListenService";
@@ -29,9 +32,9 @@ public class ListenService extends Service {
         System.loadLibrary("soundAuth");
     }
 
-    private AudioRecord record;
     private final float sample_rate = 48000;
     private int bufferSize = 500000;
+    private boolean listening = true;
     private Context context;
     private AudioTrack output;
 
@@ -55,6 +58,22 @@ public class ListenService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         initGGwave(sample_rate, bufferSize);
+        if (intent == null) {
+            Log.e(TAG, "onStartCommand: Intent null");
+            return Service.START_STICKY;
+        }
+        
+        if(Objects.equals(intent.getStringExtra("mode"), "Listen")){
+            new Thread(this::listen).start();
+        } else {
+            init_play(intent);
+        }
+
+        return Service.START_STICKY;
+    }
+
+
+    private void init_play(Intent intent) {
         int outChannel = AudioFormat.CHANNEL_OUT_MONO;
         bufferSize = AudioTrack.getMinBufferSize((int) sample_rate, outChannel, AudioFormat.ENCODING_PCM_16BIT);
         bufferSize *= 2;
@@ -67,12 +86,10 @@ public class ListenService extends Service {
         assert message != null;
 
         playMessage(message.getBytes(StandardCharsets.UTF_8));
-
-        return Service.START_STICKY;
     }
 
     public void playMessage(byte[] message) {
-        byte[] audio = encode(message, message.length);
+        byte[] audio = encode(message);
         int max = 0;
         for (byte b : audio) {
             max = Math.max(max, b);
@@ -100,13 +117,33 @@ public class ListenService extends Service {
     }
 
     public void listen() throws SecurityException {
-        var bufferSize = AudioRecord.getMinBufferSize((int)sample_rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_8BIT);
+        Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
+        var bufferSize = 8192; //AudioRecord.getMinBufferSize((int)sample_rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
 
-        var audio = new AudioRecord.Builder().setAudioFormat(new AudioFormat.Builder().setSampleRate((int)sample_rate).setEncoding(AudioFormat.ENCODING_PCM_8BIT).setChannelMask(AudioFormat.CHANNEL_IN_MONO).build())
-                .setBufferSizeInBytes(bufferSize).setAudioSource(MediaRecorder.AudioSource.MIC).build();
+        var audio = new AudioRecord(MediaRecorder.AudioSource.DEFAULT,
+                (int)sample_rate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                bufferSize);
+
+        Log.d("ListenService", "buffer size = " + bufferSize);
+        Log.d("ListenService", "Sample rate = " + audio.getSampleRate());
 
 
+        short[] audioData = new short[bufferSize];
+        audio.startRecording();
+        int received = 0;
+        while(listening) {
+            int len = audio.read(audioData, 0, bufferSize);
+            byte[] data = decode(audioData);
+            received += len;
+            if (data != null)
+                Log.d("Message", new String(data));
+        }
 
+        audio.stop();
+        audio.release();
+        Log.v(TAG, String.format("Capturing stopped. Samples read: %d", received));
     }
 
     @Override
@@ -114,9 +151,11 @@ public class ListenService extends Service {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
+
+
     private native boolean initGGwave(float sample_rate, int bufferSize);
 
-    private native byte[] encode(byte[] message, int messageSize) throws SoundProcessException;
+    private native byte[] encode(byte[] message) throws SoundProcessException;
 
-    private native byte[] decode(byte[] audio, int audioSize) throws SoundProcessException;
+    private native byte[] decode(short[] audioData) throws SoundProcessException;
 }

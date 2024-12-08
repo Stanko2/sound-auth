@@ -5,76 +5,53 @@
 #include <jni.h>
 #include "ggwave/ggwave.h"
 #include <string>
+#include <android/log.h>
 
-GGWave* ggWave;
-char* msgBuffer;
-int msg_buffer_size;
-float sample_rate;
-
-extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_example_soundauth_ListenService_initGGWave(JNIEnv *env, jobject thiz, jfloat rate, jint buffer_size) {
-    sample_rate = rate;
-//    msgBuffer = new char [buffer_size];
-//    msg_buffer_size = buffer_size;
-//    ggWave = std::make_shared<GGWave>();
-//    return ggWave != nullptr;
-    return true;
-}
+ggwave_Instance ggWave;
+ggvector<uint8_t> msgBuffer;
 
 extern "C"
 JNIEXPORT jbyteArray JNICALL
 Java_com_example_soundauth_ListenService_encode(JNIEnv * env, jobject thiz, jbyteArray message) {
-    memset(msgBuffer, 0, msg_buffer_size);
+    int message_size = env->GetArrayLength(message);
+    char buff[message_size];
+    env->GetByteArrayRegion(message, 0, message_size, (jbyte*)buff);
+    int waveform_length = ggwave_encode(ggWave, buff, message_size, GGWAVE_PROTOCOL_AUDIBLE_FASTEST, 50, NULL, 1);
 
-    ggWave = new GGWave(GGWave::Parameters  {
-        -1,
-        GGWave::kDefaultSampleRate,
-        GGWave::kDefaultSampleRate,
-        GGWave::kDefaultSampleRate,
-        GGWave::kDefaultSamplesPerFrame,
-        GGWave::kDefaultSoundMarkerThreshold,
-        GGWAVE_SAMPLE_FORMAT_I16,
-        GGWAVE_SAMPLE_FORMAT_I16,
-        GGWAVE_OPERATING_MODE_TX
-    });
-    int messageSize = env->GetArrayLength(message);
-    char buff[messageSize];
-    env->GetByteArrayRegion(message, 0, messageSize, (jbyte*)buff);
-    ggWave->init(messageSize, buff, GGWAVE_PROTOCOL_ULTRASOUND_NORMAL, 100);
-    unsigned int length = ggWave->encode();
-    if (length > 0){
-        jbyteArray ret = env->NewByteArray((jsize)length);
-        env->SetByteArrayRegion(ret, 0, (jsize)length, (jbyte*)ggWave->txWaveform());
+    if (waveform_length > 0){
+        char waveform[waveform_length];
+        ggwave_encode(ggWave, buff, message_size, GGWAVE_PROTOCOL_AUDIBLE_FASTEST, 50, waveform, 0);
+
+        jbyteArray ret = env->NewByteArray((jsize)waveform_length);
+        env->SetByteArrayRegion(ret, 0, (jsize)waveform_length, (jbyte*)waveform);
         return ret;
     }
 
-    std::string s = "No data encoded - encode() returned " + std::to_string(length);
+    std::string s = "No data encoded - encode() returned " + std::to_string(waveform_length);
     env->ThrowNew(env->FindClass("com/example/soundauth/SoundProcessException"), s.c_str());
     return nullptr;
 }
 
 extern "C"
 JNIEXPORT jbyteArray JNICALL
-Java_com_example_soundauth_ListenService_decode(JNIEnv * env, jobject thiz, jbyteArray audio, jint audioSize) {
-    memset(msgBuffer, 0, msg_buffer_size);
-    bool valid = ggWave->decode(audio, audioSize);
-    if (!valid) {
-        // throw error
+Java_com_example_soundauth_ListenService_decode(JNIEnv * env, jobject thiz, jshortArray audioData) {
+    jsize dataSize = env->GetArrayLength(audioData);
+    jboolean isCopy = false;
+    jshort* data = env->GetShortArrayElements(audioData, &isCopy);
+
+    char output[1000];
+    int length = ggwave_decode(ggWave, (char*) data, 2*dataSize, output);
+
+    // no data detected
+    if (length == 0) {
         return nullptr;
     }
 
-    jbyteArray ret = env->NewByteArray(ggWave->rxDataLength());
-    env->SetByteArrayRegion(ret, 0, ggWave->rxDataLength(), (jbyte*) ggWave->rxData().data());
+    __android_log_print(ANDROID_LOG_DEBUG, "GGWAVE", "received message %s", output);
+    jbyteArray ret = env->NewByteArray(length);
+    env->SetByteArrayRegion(ret, 0, length, reinterpret_cast<const jbyte *>(output));
+
     return ret;
-//    ggWave->init()
-//    ggWave->encode()
-//    int length = ggwave_decode(ggWave, audio, audioSize, msgBuffer);
-//    if (length > 0){
-//        jbyteArray ret = env->NewByteArray(length);
-//        env->SetByteArrayRegion(ret, 0, length, (jbyte*) msgBuffer);
-//        return ret;
-//    }
 }
 
 extern "C"
@@ -87,8 +64,13 @@ Java_com_example_soundauth_MainActivity_stringFromJNI(
 }
 extern "C"
 JNIEXPORT jboolean JNICALL
-Java_com_example_soundauth_ListenService_initGGwave(JNIEnv *env, jobject thiz, jfloat sample_rate,
-                                                    jint buffer_size) {
-    // TODO: implement initGGwave()
+Java_com_example_soundauth_ListenService_initGGwave(JNIEnv *env, jobject thiz, jfloat sample_rate,jint buffer_size) {
+    ggwave_Parameters parameters = ggwave_getDefaultParameters();
+    parameters.sampleFormatInp = GGWAVE_SAMPLE_FORMAT_I16;
+    parameters.sampleFormatOut = GGWAVE_SAMPLE_FORMAT_I16;
+    parameters.sampleRateInp = sample_rate;
+    ggWave = ggwave_init(parameters);
+
+    __android_log_print(ANDROID_LOG_DEBUG, "GGWAVE", "Successfully initialized");
     return true;
 }
