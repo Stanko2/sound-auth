@@ -1,59 +1,49 @@
 #include "communication.h"
 #include <iostream>
 
-Communication::Communication() {
-  ggwave = new GGWave(GGWave::Parameters {
-    -1,
-    GGWave::kDefaultSampleRate,
-    GGWave::kDefaultSampleRate,
-    GGWave::kDefaultSampleRate,
-    GGWave::kDefaultSamplesPerFrame,
-    GGWave::kDefaultSoundMarkerThreshold,
-    GGWAVE_SAMPLE_FORMAT_I16,
-    GGWAVE_SAMPLE_FORMAT_I16,
-    GGWAVE_OPERATING_MODE_RX_AND_TX
-  });
+Communication::Communication(AudioControl* audio) {
+  ggwave_setLogFile(stderr);
+  ggwave_Parameters parameters = ggwave_getDefaultParameters();
+  parameters.sampleFormatInp = audio->getInputSampleFormat();
+  parameters.sampleFormatOut = audio->getOutputSampleFormat();
+  parameters.sampleRateInp = audio->getInputSampleRate();
+  parameters.sampleRateOut = audio->getOutputSampleRate();
+  parameters.payloadLength = -1;
+  ggWave = new GGWave(parameters);
+  instance = this;
 
-  size_t sample_buffer_size = ggwave->samplesPerFrame() * ggwave->sampleSizeInp() * 32;
+  audio->setRequiredBufferSize(ggWave->samplesPerFrame()*ggWave->sampleSizeInp());
+  audio->capture_callback = [](uint8_t* samples, size_t size){
+    instance->samples_received(samples, size);
+  };
 
-  received_samples = std::vector<uint16_t>(sample_buffer_size);
-  received_data = std::vector<uint8_t>(0);
+
+  received_data = std::vector<uint8_t>();
 }
 
 Communication::~Communication() {
+  delete ggWave;
 }
 
-void Communication::samples_received(uint16_t* samples, size_t sample_size)
+void Communication::samples_received(uint8_t* samples, size_t sample_size)
 {
-  uint16_t max = 0;
-  for (size_t i = 0; i < sample_size; i++)
-  {
-    received_samples.push_back(samples[i]);
-    max = std::max(max, samples[i]);
-  }
+  bool success = ggWave->decode(samples, sample_size);
+  // std::cout << "decoding " << std::endl;
+  GGWave::TxRxData message;
 
-  size_t required_size = ggwave->samplesPerFrame() * ggwave->sampleSizeInp();
-
-  if (received_samples.size() > required_size) {
-    int ret = ggwave->decode(received_samples.data(), received_samples.size() * sizeof(uint16_t));
-
-    if (!ret) {
-      std::cerr << "Failed to decode message" << std::endl;
-    } else {
-      std::cout << "Decoded message: " << ggwave->rxData().size();
-
-      received_data.insert(received_data.end(), ggwave->rxData().data(), ggwave->rxData().data() + ggwave->rxData().size());
-      // for (size_t i = 0; i < received_data.size(); i++)
-      // {
-      //   fprintf(stdout, "%d ", received_data[i]);
-      // }
-      received_data.clear();
+  if (!success) {
+    std::cerr << "Failed to decode message" << std::endl;
+  } else{
+    int len = ggWave->rxTakeData(message);
+    if (len > 0) {
+      std::cout << "Decoded message size: " << message.size();
+      received_data.insert(received_data.end(), message.begin(), message.end());
     }
-    std::cout << "Max " << max << ' ' << ret;
-    received_samples.clear();
-    std::cout << std::endl;
   }
+  // std::cout << std::endl;
 }
+
+// void Communication::encode_message
 
 int Communication::get_data(std::vector<uint8_t> &out)
 {

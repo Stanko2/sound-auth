@@ -5,14 +5,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(PIPEWIRE REQUIRED libpipewire-0.3)
+find_package(SDL2 REQUIRED)
 
-include_directories(${PIPEWIRE_INCLUDE_DIRS})
 
 add_executable(sound-auth main.cpp)
 
 add_subdirectory(external/ggwave)
 
-target_link_libraries(sound-auth ${PIPEWIRE_LIBRARIES} ggwave)
+target_include_directories(${PROJECT_NAME} PRIVATE ${SDL2_INCLUDE_DIRS})
 
-target_compile_options(sound-auth PRIVATE ${PIPEWIRE_CFLAGS_OTHER})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${SDL2_LIBRARIES} ggwave)
+
+target_compile_options(${PROJECT_NAME} PRIVATE ${SDL2_CFLAGS_OTHER})

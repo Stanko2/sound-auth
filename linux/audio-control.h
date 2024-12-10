@@ -1,53 +1,53 @@
 #pragma once
-extern "C" {
-    #include <spa/param/audio/format-utils.h>
-    #include <pipewire/pipewire.h>
-}
-
 #include <vector>
 
 #include "communication.h"
+#include <SDL2/SDL.h>
+
+#include<thread>
+
 
 #define DEFAULT_CHANNELS 2
-#define DEFAULT_RATE     44100
+#define DEFAULT_RATE     48000
 
 class AudioControl {
 private: 
     float* data;
+    volatile bool is_running = false;
     inline static AudioControl* instance;
-    pw_main_loop *loop;
-    pw_stream *output_stream;
-    pw_stream *input_stream;
-    pw_context *context;
-    pw_core *core;
-    spa_hook *listener;
-    uint8_t output_buffer[1024];
-    uint8_t input_buffer[1024];
-    
-    pw_stream_events output_stream_events
-    {
-        PW_VERSION_STREAM_EVENTS,
-        .process=process_output
-    };
+    size_t required_buffer_size = 0;
 
-    pw_stream_events input_stream_events
-    {
-        PW_VERSION_STREAM_EVENTS,
-        .process=process_input
-    };
+    void* output_buffer;
+    size_t output_buffer_size = 0;
 
     static void process_output(void* data);
     static void process_input(void* data);
+    bool init_playback(int devId);
+    bool init_capture(int devId);
 
-    void on_samples_received();
+    bool loop_step();
+    void loop();
+
     Communication* comm;
-public:
-    AudioControl(Communication* comm);
-    void play(uint8_t* data);
-    ~AudioControl();
-};
+    SDL_AudioSpec playbackSpec;
+    SDL_AudioSpec captureSpec;
+    SDL_AudioDeviceID playbackDevice;
+    SDL_AudioDeviceID captureDevice;
 
-struct process_data {
-    pw_stream *stream;
-    GGWave* ggwave;
+    std::thread* loop_thread;
+public:
+
+    void (*capture_callback)(uint8_t* data, size_t data_size) = NULL;
+    GGWave::SampleFormat getOutputSampleFormat();
+    GGWave::SampleFormat getInputSampleFormat();
+    int getOutputSampleRate();
+    int getInputSampleRate();
+    void setRequiredBufferSize(size_t size);
+    void start_loop();
+    void end_loop();
+
+    void queueAudio(void* data, size_t data_size);
+
+    AudioControl();
+    ~AudioControl();
 };
