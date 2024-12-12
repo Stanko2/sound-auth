@@ -16,6 +16,8 @@ import android.os.Process;
 import android.provider.MediaStore;
 import android.util.Log;
 
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -74,6 +76,9 @@ public class ListenService extends Service {
 
 
     private void init_play(Intent intent) {
+        AudioManager manager = getSystemService(AudioManager.class);
+        manager.setMode(AudioManager.MODE_RINGTONE);
+        manager.setSpeakerphoneOn(true);
         int outChannel = AudioFormat.CHANNEL_OUT_MONO;
         bufferSize = AudioTrack.getMinBufferSize((int) sample_rate, outChannel, AudioFormat.ENCODING_PCM_16BIT);
         bufferSize *= 2;
@@ -137,8 +142,12 @@ public class ListenService extends Service {
             int len = audio.read(audioData, 0, bufferSize);
             byte[] data = decode(audioData);
             received += len;
-            if (data != null)
+            if (data != null) {
                 Log.d("Message", new String(data));
+                Intent intent = new Intent("Message received");
+                intent.putExtra("message", new String(data));
+                LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+            }
         }
 
         audio.stop();

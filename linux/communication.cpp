@@ -43,7 +43,19 @@ void Communication::samples_received(uint8_t* samples, size_t sample_size)
   // std::cout << std::endl;
 }
 
-// void Communication::encode_message
+int Communication::encode_message(std::vector<uint8_t> &message) {
+  ggWave->init(message.size(), (const char *) message.data(), GGWAVE_PROTOCOL_AUDIBLE_FASTEST, 25);
+  size_t len = ggWave->encode();
+
+  waveform.resize(len);
+  memcpy(waveform.data(), ggWave->txWaveform(), len);
+
+  return len;
+}
+
+std::vector<uint8_t> Communication::get_waveform() {
+  return waveform;
+}
 
 int Communication::get_data(std::vector<uint8_t> &out)
 {

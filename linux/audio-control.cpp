@@ -1,8 +1,6 @@
 #pragma once
 #include<iostream>
 #include "audio-control.h"
-#include <string>
-#include <fstream>
 #include <chrono>
 #include <thread>
 
@@ -52,7 +50,7 @@ int AudioControl::getOutputSampleRate() {
 AudioControl::AudioControl()
 {
   SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
-  
+
   if (SDL_Init(SDL_INIT_AUDIO) < 0) {
     std::cerr << "Failed to initialize SDL" << std::endl;
     return;
@@ -106,21 +104,29 @@ bool AudioControl::init_playback(int devId) {
     return false;
   }
 
-  if (obtained.format != playbackSpec.format || 
+  if (obtained.format != playbackSpec.format ||
     obtained.channels != playbackSpec.channels ||
     obtained.samples != playbackSpec.samples) {
     SDL_CloseAudio();
     std::cerr << "Requested audio format unsupported" << std::endl;
     return false;
-  } 
-  
+  }
+
   playbackDevice = outDevice;
+
+  printf("Obtained spec for output device (SDL Id = %d):\n", playbackDevice);
+  printf("    - Sample rate:       %d\n", obtained.freq);
+  printf("    - Format:            %d (required: %d)\n", obtained.format, playbackSpec.format);
+  printf("    - Channels:          %d (required: %d)\n", obtained.channels, playbackSpec.channels);
+  printf("    - Samples per frame: %d\n", obtained.samples);
+
+
   return true;
 }
 
 bool AudioControl::init_capture(int devId) {
   std::cout << "Initializing capture" << std::endl;
-  
+
   SDL_zero(captureSpec);
 
   captureSpec.freq = GGWave::kDefaultSampleRate;
@@ -159,12 +165,12 @@ bool AudioControl::init_capture(int devId) {
 
 void AudioControl::setRequiredBufferSize(size_t size) {
   required_buffer_size = size;
-  output_buffer = malloc(100*required_buffer_size);
+  output_buffer = malloc(500*required_buffer_size);
 }
 
-void AudioControl::queueAudio(void* data, size_t data_size) {
-  output_buffer_size = data_size;
-  memcpy(output_buffer, data, data_size);
+void AudioControl::queueAudio(std::vector<uint8_t> &data) {
+  output_buffer_size = data.size();
+  memcpy(output_buffer, data.data(), data.size());
 }
 
 bool AudioControl::loop_step(){
@@ -180,15 +186,22 @@ bool AudioControl::loop_step(){
     return false;
   }
 
+  auto tNow = std::chrono::high_resolution_clock::now();
+
   if (output_buffer_size > 0) {
     SDL_PauseAudioDevice(captureDevice, SDL_TRUE);
     SDL_QueueAudio(playbackDevice, output_buffer, output_buffer_size);
+    float duration = (float)output_buffer_size / (float)playbackSpec.freq;
+    std::cout << "Duration" << duration << std::endl;
+    output_buffer_size = 0;
+    output_buffer = NULL;
+    SDL_PauseAudioDevice(playbackDevice, SDL_FALSE);
   } else {
     static auto tLastNoData = std::chrono::high_resolution_clock::now();
-    auto tNow = std::chrono::high_resolution_clock::now();
 
 
     if (SDL_GetQueuedAudioSize(playbackDevice) < required_buffer_size) {
+      SDL_PauseAudioDevice(playbackDevice, SDL_TRUE);
       SDL_PauseAudioDevice(captureDevice, SDL_FALSE);
       const int nHave = (int) SDL_GetQueuedAudioSize(captureDevice);
       const int nNeed = required_buffer_size;
@@ -227,7 +240,6 @@ void AudioControl::start_loop() {
 
 void AudioControl::end_loop() {
   is_running = false;
-  std::cout << "stop" << std::endl;
 }
 
 void AudioControl::loop() {

@@ -46,7 +46,7 @@ public:
     void start_loop();
     void end_loop();
 
-    void queueAudio(void* data, size_t data_size);
+    void queueAudio(std::vector<uint8_t> &data);
 
     AudioControl();
     ~AudioControl();
