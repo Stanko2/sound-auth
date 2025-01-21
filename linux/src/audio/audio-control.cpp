@@ -1,4 +1,3 @@
-#pragma once
 #include<iostream>
 #include "audio-control.h"
 #include <chrono>
@@ -71,8 +70,8 @@ AudioControl::AudioControl()
     printf("    - Capture device #%d: '%s'\n", i, SDL_GetAudioDeviceName(i, SDL_TRUE));
   }
 
-  init_capture(-1);
-  init_playback(-1);
+  init_capture(0);
+  init_playback(0);
 
 }
 

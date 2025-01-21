@@ -9,12 +9,11 @@
 
 #define DEFAULT_CHANNELS 2
 #define DEFAULT_RATE     48000
-
 class AudioControl {
-private: 
+private:
     float* data;
     volatile bool is_running = false;
-    inline static AudioControl* instance;
+    static AudioControl* instance;
     size_t required_buffer_size = 0;
 
     void* output_buffer;
@@ -28,7 +27,6 @@ private:
     bool loop_step();
     void loop();
 
-    Communication* comm;
     SDL_AudioSpec playbackSpec;
     SDL_AudioSpec captureSpec;
     SDL_AudioDeviceID playbackDevice;

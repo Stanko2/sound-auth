@@ -1,5 +1,5 @@
 #pragma once
-#include <ggwave/ggwave.h>
+#include "../ggwave/ggwave.h"
 #include <vector>
 #include "audio-control.h"
 
@@ -13,9 +13,9 @@ private:
     GGWave* ggWave;
     std::vector<uint8_t> received_data;
     std::vector<uint8_t> waveform;
-    
+
 public:
-    static Communication* instance;
+    inline static Communication* instance;
     void samples_received(uint8_t* samples, size_t samples_size);
     int get_data(std::vector<uint8_t> &out);
     int encode_message(std::vector<uint8_t> &message);
@@ -24,4 +24,4 @@ public:
     ~Communication();
 };
 
-Communication* Communication::instance = NULL;
+// Communication* Communication::instance = NULL;

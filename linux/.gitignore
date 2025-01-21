@@ -1,1 +1,4 @@
 external/ggwave/*
+
+pam_sound_auth.so
+install_manifest.txt
