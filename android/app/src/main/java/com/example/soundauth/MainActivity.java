@@ -3,6 +3,7 @@ package com.example.soundauth;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -20,6 +21,7 @@ public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
 
+    @SuppressLint("NewApi")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -38,8 +40,6 @@ public class MainActivity extends AppCompatActivity {
 
         binding.receive.setOnClickListener((e)-> {
             Intent i = new Intent(this, ListenService.class);
-            i.putExtra("mode", "Listen");
-            i.putExtra("message", "");
             startService(i);
         });
     }

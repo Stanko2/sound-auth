@@ -8,19 +8,18 @@
 #include <android/log.h>
 
 ggwave_Instance ggWave;
-ggvector<uint8_t> msgBuffer;
 
 extern "C"
 JNIEXPORT jbyteArray JNICALL
-Java_com_example_soundauth_ListenService_encode(JNIEnv * env, jobject thiz, jbyteArray message) {
+Java_com_example_soundauth_MessageSender_encode(JNIEnv * env, jobject thiz, jbyteArray message) {
     int message_size = env->GetArrayLength(message);
     char buff[message_size];
     env->GetByteArrayRegion(message, 0, message_size, (jbyte*)buff);
-    int waveform_length = ggwave_encode(ggWave, buff, message_size, GGWAVE_PROTOCOL_AUDIBLE_FASTEST, 50, NULL, 1);
+    int waveform_length = ggwave_encode(ggWave, buff, message_size, GGWAVE_PROTOCOL_ULTRASOUND_FASTEST, 50, NULL, 1);
 
     if (waveform_length > 0){
         char waveform[waveform_length];
-        ggwave_encode(ggWave, buff, message_size, GGWAVE_PROTOCOL_AUDIBLE_FASTEST, 50, waveform, 0);
+        ggwave_encode(ggWave, buff, message_size, GGWAVE_PROTOCOL_ULTRASOUND_FASTEST, 50, waveform, 0);
 
         jbyteArray ret = env->NewByteArray((jsize)waveform_length);
         env->SetByteArrayRegion(ret, 0, (jsize)waveform_length, (jbyte*)waveform);
@@ -34,7 +33,7 @@ Java_com_example_soundauth_ListenService_encode(JNIEnv * env, jobject thiz, jbyt
 
 extern "C"
 JNIEXPORT jbyteArray JNICALL
-Java_com_example_soundauth_ListenService_decode(JNIEnv * env, jobject thiz, jshortArray audioData) {
+Java_com_example_soundauth_MessageReceiver_decode(JNIEnv * env, jobject thiz, jshortArray audioData) {
     jsize dataSize = env->GetArrayLength(audioData);
     jboolean isCopy = false;
     jshort* data = env->GetShortArrayElements(audioData, &isCopy);
@@ -45,6 +44,10 @@ Java_com_example_soundauth_ListenService_decode(JNIEnv * env, jobject thiz, jsho
     // no data detected
     if (length == 0) {
         return nullptr;
+    }
+
+    if (length == -1) {
+        env->ThrowNew(env->FindClass("com/example/soundauth/SoundProcessException"), "Error while decoding message");
     }
 
     __android_log_print(ANDROID_LOG_DEBUG, "GGWAVE", "received message %s", output);

@@ -1,4 +1,5 @@
 #include "communication.h"
+#include <ggwave/ggwave.h>
 #include <iostream>
 
 Communication::Communication(AudioControl* audio) {
@@ -44,7 +45,7 @@ void Communication::samples_received(uint8_t* samples, size_t sample_size)
 }
 
 int Communication::encode_message(std::vector<uint8_t> &message) {
-  ggWave->init(message.size(), (const char *) message.data(), GGWAVE_PROTOCOL_AUDIBLE_FASTEST, 25);
+  ggWave->init(message.size(), (const char *) message.data(), GGWAVE_PROTOCOL_ULTRASOUND_FASTEST, 25);
   size_t len = ggWave->encode();
 
   waveform.resize(len);
@@ -64,7 +65,7 @@ int Communication::get_data(std::vector<uint8_t> &out)
   {
     out[i] = received_data[i];
   }
-  
+
   received_data.clear();
   return out.size();
 }

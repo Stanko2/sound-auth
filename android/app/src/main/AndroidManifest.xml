@@ -17,7 +17,8 @@
         <service
             android:name=".ListenService"
             android:enabled="true"
-            android:exported="true"></service>
+            android:exported="true"
+            android:foregroundServiceType="microphone"/>
 
         <activity
             android:name=".MainActivity"
