@@ -167,7 +167,7 @@ void AudioControl::setRequiredBufferSize(size_t size) {
   output_buffer = malloc(500*required_buffer_size);
 }
 
-void AudioControl::queueAudio(std::vector<uint8_t> &data) {
+void AudioControl::queue_audio(std::vector<uint8_t> &data) {
   output_buffer_size = data.size();
   memcpy(output_buffer, data.data(), data.size());
 }

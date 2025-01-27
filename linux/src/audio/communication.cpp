@@ -2,6 +2,8 @@
 #include <ggwave/ggwave.h>
 #include <iostream>
 
+#define PROTOCOL GGWAVE_PROTOCOL_ULTRASOUND_FASTEST
+
 Communication::Communication(AudioControl* audio) {
   ggwave_setLogFile(stderr);
   ggwave_Parameters parameters = ggwave_getDefaultParameters();
@@ -11,10 +13,11 @@ Communication::Communication(AudioControl* audio) {
   parameters.sampleRateOut = audio->getOutputSampleRate();
   parameters.payloadLength = -1;
   ggWave = new GGWave(parameters);
+  // ggWave->rxProtocols().only(PROTOCOL);
   instance = this;
 
   audio->setRequiredBufferSize(ggWave->samplesPerFrame()*ggWave->sampleSizeInp());
-  audio->capture_callback = [](uint8_t* samples, size_t size){
+  audio->capture_callback = [](uint8_t* samples, std::size_t size){
     instance->samples_received(samples, size);
   };
 
@@ -26,7 +29,7 @@ Communication::~Communication() {
   delete ggWave;
 }
 
-void Communication::samples_received(uint8_t* samples, size_t sample_size)
+void Communication::samples_received(uint8_t* samples, std::size_t sample_size)
 {
   bool success = ggWave->decode(samples, sample_size);
   // std::cout << "decoding " << std::endl;
@@ -39,14 +42,17 @@ void Communication::samples_received(uint8_t* samples, size_t sample_size)
     if (len > 0) {
       std::cout << "Decoded message size: " << message.size();
       received_data.insert(received_data.end(), message.begin(), message.end());
+      if (receive_callback != NULL) {
+        receive_callback();
+      }
     }
   }
   // std::cout << std::endl;
 }
 
 int Communication::encode_message(std::vector<uint8_t> &message) {
-  ggWave->init(message.size(), (const char *) message.data(), GGWAVE_PROTOCOL_ULTRASOUND_FASTEST, 25);
-  size_t len = ggWave->encode();
+  ggWave->init(message.size(), (const char *) message.data(), PROTOCOL, 25);
+  std::size_t len = ggWave->encode();
 
   waveform.resize(len);
   memcpy(waveform.data(), ggWave->txWaveform(), len);
@@ -58,10 +64,9 @@ std::vector<uint8_t> Communication::get_waveform() {
   return waveform;
 }
 
-int Communication::get_data(std::vector<uint8_t> &out)
-{
+int Communication::get_data(std::vector<uint8_t> &out){
   out.resize(received_data.size());
-  for (size_t i = 0; i < received_data.size(); i++)
+  for (std::size_t i = 0; i < received_data.size(); i++)
   {
     out[i] = received_data[i];
   }

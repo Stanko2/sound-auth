@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
         std::vector<uint8_t> message(msg.begin(), msg.end());
         c->encode_message(message);
         std::vector<uint8_t> waveform = c->get_waveform();
-        a->queueAudio(waveform);
+        a->queue_audio(waveform);
     }
 
     a->start_loop();

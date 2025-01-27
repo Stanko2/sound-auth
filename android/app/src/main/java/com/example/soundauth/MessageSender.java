@@ -60,11 +60,15 @@ public class MessageSender implements Runnable {
         while(isRunning) {
             if (messagesToSend.isEmpty()) continue;
             byte[] message = messagesToSend.remove();
-            sendMessage(message);
+            try {
+                sendMessage(message);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
-    private void sendMessage(byte[] message) {
+    private void sendMessage(byte[] message) throws InterruptedException {
         byte[] audio = encode(message);
         int max = 0;
         for (byte b : audio) {
@@ -84,6 +88,7 @@ public class MessageSender implements Runnable {
             }
             offset += toWrite;
         }
+        Thread.sleep(30);
         receiver.isPlaying = false;
     }
 

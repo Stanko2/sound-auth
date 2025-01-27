@@ -1,5 +1,8 @@
 package com.example.soundauth;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -9,6 +12,9 @@ import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.os.IBinder;
 import android.util.Log;
+
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.ServiceCompat;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
@@ -31,6 +37,7 @@ public class ListenService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        promoteToForeground();
     }
 
     @Override
@@ -40,6 +47,7 @@ public class ListenService extends Service {
 
         receiver = new MessageReceiver((int)sample_rate, manager);
         sender = new MessageSender((int) sample_rate, manager);
+        receiver.setSender(sender);
 
         var listenThread = new Thread(receiver);
         listenThread.setDaemon(true);
@@ -50,6 +58,7 @@ public class ListenService extends Service {
         sendThread.setDaemon(true);
         sendThread.setName("Sound-Auth send thread");
         sendThread.start();
+
 
 
         if (intent.hasExtra("message")) {
@@ -70,6 +79,15 @@ public class ListenService extends Service {
         return super.stopService(name);
     }
 
+
+    private void promoteToForeground() {
+        NotificationChannel channel = new NotificationChannel("sound-auth", "Sound-auth service", NotificationManager.IMPORTANCE_MIN);
+        var manager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+        manager.createNotificationChannel(channel);
+
+        var notification = new NotificationCompat.Builder(this, "sound-auth").setContentTitle("").setContentText("").build();
+        startForeground(1, notification);
+    }
 
     private native boolean initGGwave(float sample_rate, int bufferSize);
 }

@@ -1,3 +1,5 @@
+#include <cstddef>
+#include <cstdint>
 #include <security/pam_modules.h>
 #include <security/pam_ext.h>
 #include <string>
@@ -7,10 +9,10 @@
 #include <iostream>
 // #include "../audio/communication.h"
 
+std::vector<uint8_t> data;
+
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv) {
     std::cout << "Hello from pam_sm_authenticate" << std::endl;
-    std::filesystem::path cwd = std::filesystem::current_path();
-    std::cout << cwd.string() << std::endl;
 
     AudioControl* audio = new AudioControl();
     Communication* comm = new Communication(audio);
@@ -19,10 +21,27 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
     message.insert(message.end(), msg.begin(), msg.end());
 
     comm->encode_message(message);
+    comm->receive_callback = [comm, audio, data](){
+        std::cout << "Received message" << std::endl;
+        int ret = comm->get_data(const_cast<std::vector<uint8_t>&>(data));
+        std::cout << "Data size: " << ret << " " << data.size() << std::endl;
+        std::cout << "Message: " << std::endl;
+        for (auto c : data) {
+            std::cout << c;
+        }
+        audio->end_loop();
+    };
     std::vector<uint8_t> waveform = comm->get_waveform();
-    audio->queueAudio(waveform);
+    audio->queue_audio(waveform);
     audio->start_loop();
+    for(std::size_t i = 0; i < msg.size(); i++) {
+        if (msg[i] != data[i]) {
+            std::cout << "ACCESS DENIED" << std::endl;
+            return PAM_AUTH_ERR;
+        }
+    }
 
+    std::cout << "ACCESS GRANTED" << std::endl;
     return PAM_SUCCESS;
 }
 

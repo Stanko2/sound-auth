@@ -14,10 +14,10 @@ private:
     float* data;
     volatile bool is_running = false;
     static AudioControl* instance;
-    size_t required_buffer_size = 0;
+    std::size_t required_buffer_size = 0;
 
     void* output_buffer;
-    size_t output_buffer_size = 0;
+    std::size_t output_buffer_size = 0;
 
     static void process_output(void* data);
     static void process_input(void* data);
@@ -35,16 +35,16 @@ private:
     std::thread* loop_thread;
 public:
 
-    void (*capture_callback)(uint8_t* data, size_t data_size) = NULL;
+    void (*capture_callback)(uint8_t* data, std::size_t data_size) = NULL;
     GGWave::SampleFormat getOutputSampleFormat();
     GGWave::SampleFormat getInputSampleFormat();
     int getOutputSampleRate();
     int getInputSampleRate();
-    void setRequiredBufferSize(size_t size);
+    void setRequiredBufferSize(std::size_t size);
     void start_loop();
     void end_loop();
 
-    void queueAudio(std::vector<uint8_t> &data);
+    void queue_audio(std::vector<uint8_t> &data);
 
     AudioControl();
     ~AudioControl();

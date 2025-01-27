@@ -1,6 +1,5 @@
 package com.example.soundauth;
 
-import android.content.Intent;
 import android.media.AudioFocusRequest;
 import android.media.AudioFormat;
 import android.media.AudioManager;
@@ -9,14 +8,9 @@ import android.media.MediaRecorder;
 import android.os.Process;
 import android.util.Log;
 
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
-
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Queue;
 
-import java.util.Arrays;
-import java.util.stream.Stream;
 
 public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChangeListener {
     public static String TAG = "MessageReceiver";
@@ -27,6 +21,12 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
     private boolean isRunning = true;
     private static MessageReceiver instance;
     private AudioManager audioManager;
+
+    private MessageSender sender;
+
+    public void setSender(MessageSender sender) {
+        this.sender = sender;
+    }
 
     public static MessageReceiver getInstance() {
         return instance;
@@ -96,16 +96,21 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
             }
             if (max == 0) {
                 Log.w(TAG, "listenLoop: no data received");
-                initializeRecording(audioBuffer.length);
+                return;
+//                initializeRecording(audioBuffer.length);
             }
-            if (len == 0) continue;
             if (isPlaying) continue;
             try {
                 byte[] data = decode(audioBuffer);
                 if (data != null) {
                     Log.d(TAG, "MessageReceived: " + new String(data));
                     messages.add(data);
-
+                    try {
+                        sender.enqueueMessage(data);
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             } catch (SoundProcessException e) {
                 messages.add(null);

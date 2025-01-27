@@ -23,7 +23,7 @@ add_library(pam_sound_auth SHARED
 )
 target_include_directories(pam_sound_auth PRIVATE ${SDL2_INCLUDE_DIRS})
 target_link_libraries(pam_sound_auth PRIVATE ${SDL2_LIBRARIES})
-target_compile_options(pam_sound_auth PRIVATE ${SDL2_CFLAGS_OTHER})
+target_compile_options(pam_sound_auth PRIVATE ${SDL2_CFLAGS_OTHER} -g)
 
 add_executable(sound-auth src/main.cpp ${SOURCE_DIR}/ggwave/ggwave.cpp)
 target_include_directories(${PROJECT_NAME} PRIVATE ${SDL2_INCLUDE_DIRS})

@@ -35,12 +35,12 @@ public class MainActivity extends AppCompatActivity {
         binding.send.setOnClickListener((e)-> {
             Intent i = new Intent(this, ListenService.class);
             i.putExtra("message", binding.messageField.getText().toString());
-            startService(i);
+            startForegroundService(i);
         });
 
         binding.receive.setOnClickListener((e)-> {
             Intent i = new Intent(this, ListenService.class);
-            startService(i);
+            startForegroundService(i);
         });
     }
 
