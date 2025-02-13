@@ -1,8 +1,11 @@
 #include "communication.h"
-#include <ggwave/ggwave.h>
+#include <cstdint>
+#include <cstdio>
 #include <iostream>
 
 #define PROTOCOL GGWAVE_PROTOCOL_ULTRASOUND_FASTEST
+
+Communication* comm_instance = NULL;
 
 Communication::Communication(AudioControl* audio) {
   ggwave_setLogFile(stderr);
@@ -13,12 +16,11 @@ Communication::Communication(AudioControl* audio) {
   parameters.sampleRateOut = audio->getOutputSampleRate();
   parameters.payloadLength = -1;
   ggWave = new GGWave(parameters);
-  // ggWave->rxProtocols().only(PROTOCOL);
-  instance = this;
+  comm_instance = this;
 
   audio->setRequiredBufferSize(ggWave->samplesPerFrame()*ggWave->sampleSizeInp());
   audio->capture_callback = [](uint8_t* samples, std::size_t size){
-    instance->samples_received(samples, size);
+    comm_instance->samples_received(samples, size);
   };
 
 
@@ -32,7 +34,6 @@ Communication::~Communication() {
 void Communication::samples_received(uint8_t* samples, std::size_t sample_size)
 {
   bool success = ggWave->decode(samples, sample_size);
-  // std::cout << "decoding " << std::endl;
   GGWave::TxRxData message;
 
   if (!success) {
@@ -47,11 +48,10 @@ void Communication::samples_received(uint8_t* samples, std::size_t sample_size)
       }
     }
   }
-  // std::cout << std::endl;
 }
 
 int Communication::encode_message(std::vector<uint8_t> &message) {
-  ggWave->init(message.size(), (const char *) message.data(), PROTOCOL, 25);
+  ggWave->init(message.size(), (const char *) message.data(), PROTOCOL, 50);
   std::size_t len = ggWave->encode();
 
   waveform.resize(len);

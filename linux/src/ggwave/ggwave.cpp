@@ -1,4 +1,4 @@
-#include "ggwave/ggwave.h"
+#include "ggwave.h"
 
 #if !defined(ARDUINO) && !defined(PROGMEM)
 #define PROGMEM

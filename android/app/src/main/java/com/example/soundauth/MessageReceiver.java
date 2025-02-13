@@ -96,7 +96,6 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
             }
             if (max == 0) {
                 Log.w(TAG, "listenLoop: no data received");
-                return;
 //                initializeRecording(audioBuffer.length);
             }
             if (isPlaying) continue;
@@ -106,8 +105,8 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
                     Log.d(TAG, "MessageReceived: " + new String(data));
                     messages.add(data);
                     try {
+                        Thread.sleep(10);
                         sender.enqueueMessage(data);
-                        Thread.sleep(100);
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }

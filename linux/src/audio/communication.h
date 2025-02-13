@@ -16,7 +16,6 @@ private:
     std::vector<uint8_t> waveform;
 
 public:
-    inline static Communication* instance;
     void samples_received(uint8_t* samples, std::size_t samples_size);
     int get_data(std::vector<uint8_t> &out);
     int encode_message(std::vector<uint8_t> &message);
@@ -25,5 +24,3 @@ public:
     ~Communication();
     std::function<void(void)> receive_callback = NULL;
 };
-
-// Communication* Communication::instance = NULL;

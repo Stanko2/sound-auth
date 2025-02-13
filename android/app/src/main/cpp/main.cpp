@@ -42,7 +42,6 @@ Java_com_example_soundauth_MessageReceiver_decode(JNIEnv * env, jobject thiz, js
 
     char output[1000];
     int length = ggwave_decode(ggWave, (char*) data, 2*dataSize, output);
-
     // no data detected
     if (length == 0) {
         return nullptr;
