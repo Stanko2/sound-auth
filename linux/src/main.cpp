@@ -3,7 +3,6 @@
 #include "audio/communication.cpp"
 
 #include <cstdio>
-#include <thread>
 #include <csignal>
 
 AudioControl* a;
