@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.10)
 project(sound-auth)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -8,8 +8,8 @@ find_package(PkgConfig REQUIRED)
 find_package(SDL2 REQUIRED)
 
 set(CMAKE_SHARED_LIBRARY_PREFIX "")
-set(SOURCE_DIR  ${PROJECT_SOURCE_DIR}/src)
-set(INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
+set(SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
+
 set(SOURCES
     ${SOURCE_DIR}/audio/audio-control.cpp
     ${SOURCE_DIR}/audio/communication.cpp
@@ -25,10 +25,9 @@ target_include_directories(pam_sound_auth PRIVATE ${SDL2_INCLUDE_DIRS})
 target_link_libraries(pam_sound_auth PRIVATE ${SDL2_LIBRARIES})
 target_compile_options(pam_sound_auth PRIVATE ${SDL2_CFLAGS_OTHER} -g)
 
-add_executable(sound-auth src/main.cpp ${SOURCE_DIR}/ggwave/ggwave.cpp)
+add_executable(${PROJECT_NAME} src/main.cpp ${SOURCE_DIR}/ggwave/ggwave.cpp)
 target_include_directories(${PROJECT_NAME} PRIVATE ${SDL2_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${SDL2_LIBRARIES})
-target_compile_options(${PROJECT_NAME} PRIVATE ${SDL2_CFLAGS_OTHER})
-target_compile_options(${PROJECT_NAME} PRIVATE -g)
+target_compile_options(${PROJECT_NAME} PRIVATE ${SDL2_CFLAGS_OTHER} -g)
 
 install(TARGETS pam_sound_auth LIBRARY DESTINATION /lib/security)
