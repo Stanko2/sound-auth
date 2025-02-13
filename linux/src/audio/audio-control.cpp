@@ -1,7 +1,7 @@
 #include <SDL2/SDL_audio.h>
 #include <SDL2/SDL_error.h>
 #include <SDL2/SDL_timer.h>
-#include<iostream>
+#include <iostream>
 #include "audio-control.h"
 #include <thread>
 

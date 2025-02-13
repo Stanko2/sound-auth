@@ -7,7 +7,6 @@
 #include <vector>
 #include "../audio/audio-control.h"
 #include <iostream>
-// #include "../audio/communication.h"
 
 std::vector<uint8_t> data;
 AudioControl* a;
@@ -39,6 +38,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
             std::cout << c;
         }
         audio->end_loop();
+        delete audio;
     };
     std::vector<uint8_t> waveform = comm->get_waveform();
     audio->queue_audio(waveform);
@@ -55,5 +55,5 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 }
 
 PAM_EXTERN int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char **argv) {
-    return PAM_SUCCESS;
+  return PAM_SUCCESS;
 }
