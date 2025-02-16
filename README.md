@@ -28,9 +28,10 @@ audio messages and retransmitting them back.
 
 ### Linux
 
-The PAM module needs `SDL` library to handle audio capture and playback. Install it using your package manager.
+In order to build the PAM module you need to have following packages installed (On Ubuntu): `libpam0g-dev`, `libsdl2-dev`, `cmake`, `build-essential`, `pkg-config`.
+Before proceeding, make sure you have all the necessary packages installed.
 
-Build and install the PAM module using the following commands:
+Build the PAM module using the following commands:
 
 ```bash
 cd linux/
@@ -45,7 +46,7 @@ This should build 2 files - `pam_sound_auth.so` and `sound_auth` binary. The `so
 
 1. In order to use PAM module you need to copy `pam_sound_auth.so` to the PAM modules directory (for example: `/lib/security/`).
 
-2. To set up the PAM module, you need to add the following line to the PAM configuration file of the service you want to protect:
+2. To set up the PAM module, you need to add the following line to the top of the PAM configuration file of the service you want to apply the module to:
 
 ```
 auth    sufficient      pam_sound_auth.so
