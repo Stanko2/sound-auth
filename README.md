@@ -11,7 +11,7 @@ of two parts - a PAM module for linux and an Android app.
 
 There are 2 options to build the app:
 - open it in Android Studio and build it there
-- use the gradle wrapper to build the app from the command line:
+- use the gradle wrapper to build the app from the command line (needs to have Java and Android SDK installed):
 
   ```bash
   cd android/
