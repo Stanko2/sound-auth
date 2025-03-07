@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <vector>
 
 #include "communication.h"
@@ -9,10 +10,11 @@
 
 #define DEFAULT_CHANNELS 2
 #define DEFAULT_RATE     48000
+
+
 class AudioControl {
 private:
     float* data;
-    volatile bool is_running = false;
     static AudioControl* instance;
     std::size_t required_buffer_size = 0;
 

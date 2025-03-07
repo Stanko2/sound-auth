@@ -14,7 +14,7 @@ import java.util.Queue;
 
 public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChangeListener {
     public static String TAG = "MessageReceiver";
-    private Queue<byte[]> messages;
+    private final Queue<byte[]> messages;
     private AudioRecord audioRecord;
     private short[] audioBuffer;
     private final int sampleRate;
@@ -104,9 +104,11 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
                 if (data != null) {
                     Log.d(TAG, "MessageReceived: " + new String(data));
                     messages.add(data);
+                    Auth auth = new Auth();
                     try {
                         Thread.sleep(10);
-                        sender.enqueueMessage(data);
+                        var res = auth.respond(data);
+                        sender.enqueueMessage(res);
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }

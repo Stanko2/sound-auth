@@ -1,3 +1,4 @@
 pam_sound_auth.so
 install_manifest.txt
 test
+secret

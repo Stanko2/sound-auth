@@ -4,6 +4,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import android.annotation.SuppressLint;
+import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -32,15 +33,16 @@ public class MainActivity extends AppCompatActivity {
         // Example of a call to a native method
         TextView tv = binding.sampleText;
 //        tv.setText(stringFromJNI());
-        binding.send.setOnClickListener((e)-> {
-            Intent i = new Intent(this, ListenService.class);
-            i.putExtra("message", binding.messageField.getText().toString());
-            startForegroundService(i);
-        });
 
         binding.receive.setOnClickListener((e)-> {
-            Intent i = new Intent(this, ListenService.class);
-            startForegroundService(i);
+            if (!isMyServiceRunning(ListenService.class)) {
+                Intent i = new Intent(this, ListenService.class);
+                startForegroundService(i);
+                binding.receive.setText("Stop");
+            } else {
+                stopService(new Intent(this, ListenService.class));
+                binding.receive.setText("Receive");
+            }
         });
     }
 
@@ -63,4 +65,14 @@ public class MainActivity extends AppCompatActivity {
             binding.outputText.setText(intent.getStringExtra("message"));
         }
     };
+
+    private boolean isMyServiceRunning(Class<?> serviceClass) {
+        ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (serviceClass.getName().equals(service.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

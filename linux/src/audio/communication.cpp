@@ -1,4 +1,5 @@
 #include "communication.h"
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
@@ -8,7 +9,7 @@
 Communication* comm_instance = NULL;
 
 Communication::Communication(AudioControl* audio) {
-  ggwave_setLogFile(stderr);
+  ggwave_setLogFile(NULL);
   ggwave_Parameters parameters = ggwave_getDefaultParameters();
   parameters.sampleFormatInp = audio->getInputSampleFormat();
   parameters.sampleFormatOut = audio->getOutputSampleFormat();
@@ -41,7 +42,6 @@ void Communication::samples_received(uint8_t* samples, std::size_t sample_size)
   } else{
     int len = ggWave->rxTakeData(message);
     if (len > 0) {
-      std::cout << "Decoded message size: " << message.size();
       received_data.insert(received_data.end(), message.begin(), message.end());
       if (receive_callback != NULL) {
         receive_callback();
