@@ -1,7 +1,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
-#include <iostream>
 #include <openssl/bn.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>

@@ -192,8 +192,9 @@ void AudioControl::setRequiredBufferSize(size_t size) {
 }
 
 void AudioControl::queue_audio(std::vector<uint8_t> &data) {
-  std::cout << "Queueing audio" << std::endl;
   output_buffer_size = data.size();
+  free(output_buffer);
+  output_buffer = malloc(500 * output_buffer_size);
   memcpy(output_buffer, data.data(), data.size());
 }
 
@@ -204,14 +205,14 @@ bool AudioControl::loop_step() {
   }
 
   if (!required_buffer_size) {
-    std::cerr << "Trying to run loop buffer size" << std::endl;
+    std::cerr << "Trying to run without loop buffer size" << std::endl;
     return false;
   }
 
   // we have some data to send
   if (output_buffer_size > 0) {
     float duration = (float)output_buffer_size / (float)playbackSpec.freq;
-    std::cout << "Duration" << duration << std::endl;
+    std::cout << "Sending message, duration: " << duration << "s" << std::endl;
     SDL_QueueAudio(playbackDevice, output_buffer, output_buffer_size);
     output_buffer_size = 0;
     output_buffer = NULL;
@@ -258,7 +259,6 @@ void AudioControl::start_loop() {
 }
 
 void AudioControl::end_loop() {
-  std::cout << "Loop ended " << (is_running ? "running" : "not running") << std::endl;
   is_running = false;
   SDL_PauseAudioDevice(captureDevice, 1);
   SDL_PauseAudioDevice(playbackDevice, 1);
