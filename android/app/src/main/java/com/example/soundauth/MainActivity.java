@@ -15,10 +15,11 @@ import android.widget.TextView;
 
 import com.example.soundauth.databinding.ActivityMainBinding;
 
+import java.util.HashSet;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-
+    public static String TAG = "MainActivity";
 
     private ActivityMainBinding binding;
 
@@ -30,20 +31,28 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // Example of a call to a native method
-        TextView tv = binding.sampleText;
-//        tv.setText(stringFromJNI());
+        var prefs = getPreferences(MODE_PRIVATE);
+        var devices = prefs.getStringSet("devices", null);
+        if (devices == null) {
+            var tv = new TextView(this);
+            tv.setText("No devices paired");
+            binding.devices.addView(tv);
+        }
+
 
         binding.receive.setOnClickListener((e)-> {
             if (!isMyServiceRunning(ListenService.class)) {
                 Intent i = new Intent(this, ListenService.class);
                 startForegroundService(i);
-                binding.receive.setText("Stop");
+                binding.statusText.setText("Service running");
+                binding.receive.setText("Stop service");
             } else {
                 stopService(new Intent(this, ListenService.class));
-                binding.receive.setText("Receive");
+                binding.statusText.setText("Service stopped");
+                binding.receive.setText("Start service");
             }
         });
+
     }
 
 
@@ -62,7 +71,7 @@ public class MainActivity extends AppCompatActivity {
     private final BroadcastReceiver audioMessageReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            binding.outputText.setText(intent.getStringExtra("message"));
+            Log.d(TAG, "onReceive: " + intent.getStringExtra("message"));
         }
     };
 

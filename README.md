@@ -57,3 +57,7 @@ auth    sufficient      pam_sound_auth.so
 
 To test the sound message transmission, run the `sound_auth` binary with some file as an argument. It will send the file as a sound message to the phone.
 If your phone has the service running, it should receive the message and play it back. You should see the message in your terminal.
+
+## Protocol
+
+Message Format `[destination address][command][data]`

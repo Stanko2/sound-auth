@@ -45,7 +45,7 @@ public class MessageSender implements Runnable {
         bufferSize = AudioTrack.getMinBufferSize((int) sampleRate, outChannel, AudioFormat.ENCODING_PCM_16BIT);
         bufferSize *= 2;
         Log.d(TAG, "onStartCommand: bufferSize " + bufferSize);
-        output = new AudioTrack.Builder().setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build())
+        output = new AudioTrack.Builder().setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
                 .setAudioFormat(new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(sampleRate).setChannelMask(outChannel).build()).setBufferSizeInBytes(bufferSize)
                 .setTransferMode(AudioTrack.MODE_STREAM).build();
         messagesToSend = new LinkedList<>();

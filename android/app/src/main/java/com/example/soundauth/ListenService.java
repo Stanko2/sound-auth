@@ -15,6 +15,7 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
@@ -48,6 +49,13 @@ public class ListenService extends Service {
         receiver = new MessageReceiver((int)sample_rate, manager);
         sender = new MessageSender((int) sample_rate, manager);
         receiver.setSender(sender);
+        receiver.setMsgHandler((msg)->{
+            var i = new Intent("message");
+            i.putExtra("data", msg.data);
+            i.putExtra("command", msg.command);
+            i.putExtra("address", msg.address);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(i);
+        });
 
         var listenThread = new Thread(receiver);
         listenThread.setDaemon(true);
@@ -73,12 +81,12 @@ public class ListenService extends Service {
     }
 
     @Override
-    public boolean stopService(Intent name) {
+    public void onDestroy() {
         receiver.stop();
         sender.stop();
-        return super.stopService(name);
+        Log.d(TAG, "stopService: Stopped");
+        super.onDestroy();
     }
-
 
     private void promoteToForeground() {
         NotificationChannel channel = new NotificationChannel("sound-auth", "Sound-auth service", NotificationManager.IMPORTANCE_MIN);

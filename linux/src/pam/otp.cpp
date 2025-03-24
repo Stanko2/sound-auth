@@ -1,15 +1,21 @@
+#pragma once
+#include "base64.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <openssl/bn.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 #include <openssl/rand.h>
+#include <unistd.h>
 #include <vector>
 
 #define CHALLENGE_SIZE 16
-#define SECRET_KEY_SIZE 8
+#define SECRET_KEY_SIZE 16
+#define CONFIG_LOCATION "./config"
 
 std::vector<unsigned char> get_challenge() {
     std::vector<unsigned char> ret(CHALLENGE_SIZE, 0);
@@ -18,15 +24,44 @@ std::vector<unsigned char> get_challenge() {
     return ret;
 }
 
-
-
-std::vector<unsigned char> getSecretKey() {
-    std::fstream f;
-    std::vector<unsigned char> key(SECRET_KEY_SIZE, 0);
-    f.open("secret");
-    for (size_t i = 0; i < SECRET_KEY_SIZE; i++) {
-        f >> key[i];
+std::string getUsername () {
+    char* name = (char*)malloc(10);
+    if (getlogin_r(name, 10)){
+        throw "Failed to get username";
     }
+    std::string s(name);
+    free(name);
+    return s;
+}
+
+std::string getHostname () {
+    char* name = (char*)malloc(10);
+    if (gethostname(name, 10)){
+        throw "Failed to get username";
+    }
+    std::string s(name);
+    free(name);
+    return s;
+}
+
+std::string getSecretKey() {
+    std::fstream f;
+    std::string key = "";
+    f.open(CONFIG_LOCATION);
+    if (!f.is_open()) {
+        throw "File not opened";
+    }
+    std::string username = getUsername();
+    while(!f.eof()) {
+        std::string line;
+        std::getline(f, line);
+        if (line.compare(0, username.size(), username) == 0) {
+            key = line.substr(username.size()+1);
+            std::string key = boost::beast::detail::base64_decode(key);
+            break;
+        }
+    }
+
     f.close();
     return key;
 }
@@ -71,9 +106,7 @@ std::vector<unsigned char> generate(std::vector<unsigned char>& challenge) {
 
     for (size_t i = 0; i < digest_len; i++) {
         d[i] = digest[i];
-        // std::cout << (int)d[i] << ' ';
     }
-    // std::cout << std::endl;
     return d;
 }
 

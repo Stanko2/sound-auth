@@ -1,5 +1,6 @@
 package com.example.soundauth;
 
+import android.content.Intent;
 import android.media.AudioFocusRequest;
 import android.media.AudioFormat;
 import android.media.AudioManager;
@@ -8,9 +9,10 @@ import android.media.MediaRecorder;
 import android.os.Process;
 import android.util.Log;
 
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+
 import java.util.LinkedList;
 import java.util.Queue;
-
 
 public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChangeListener {
     public static String TAG = "MessageReceiver";
@@ -22,10 +24,16 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
     private static MessageReceiver instance;
     private AudioManager audioManager;
 
+    private MessageHandler msgHandler;
+
     private MessageSender sender;
 
     public void setSender(MessageSender sender) {
         this.sender = sender;
+    }
+
+    public void setMsgHandler(MessageHandler handler) {
+        this.msgHandler = handler;
     }
 
     public static MessageReceiver getInstance() {
@@ -80,7 +88,6 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
         Log.d("ListenService", "buffer size = " + bufferSize);
         Log.d("ListenService", "Sample rate = " + audio.getSampleRate());
 
-
         audioBuffer = new short[bufferSize];
         audio.startRecording();
         audioRecord = audio;
@@ -104,6 +111,7 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
                 if (data != null) {
                     Log.d(TAG, "MessageReceived: " + new String(data));
                     messages.add(data);
+                    msgHandler.OnMessage(new MessageHandler.Message(data));
                     Auth auth = new Auth();
                     try {
                         Thread.sleep(10);
