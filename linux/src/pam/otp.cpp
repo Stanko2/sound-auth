@@ -35,8 +35,8 @@ std::string getUsername () {
 }
 
 std::string getHostname () {
-    char* name = (char*)malloc(10);
-    if (gethostname(name, 10)){
+    char* name = (char*)malloc(20);
+    if (gethostname(name, 20)){
         throw "Failed to get username";
     }
     std::string s(name);
@@ -57,13 +57,13 @@ std::string getSecretKey() {
         std::getline(f, line);
         if (line.compare(0, username.size(), username) == 0) {
             key = line.substr(username.size()+1);
-            std::string key = boost::beast::detail::base64_decode(key);
-            break;
+            f.close();
+            return boost::beast::detail::base64_decode(key);
         }
     }
 
     f.close();
-    return key;
+    return NULL;
 }
 
 std::vector<unsigned char> generate(std::vector<unsigned char>& challenge) {

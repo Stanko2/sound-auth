@@ -1,5 +1,6 @@
 #pragma once
 #include "otp.cpp"
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -9,7 +10,9 @@
 #include <string>
 #include <unistd.h>
 #include <vector>
+#include "../audio/communication.h"
 #include "base64.hpp"
+#include "../util.cpp"
 
 
 int generateSecretCode() {
@@ -32,12 +35,46 @@ int generateSecretCode() {
     return 0;
 }
 
-std::string getSetupMessage() {
+std::vector<uint8_t> getSetupMessage() {
     std::stringstream ss;
     std::string name = getUsername();
+    ss.write(new char[3] {1, 35, 43}, 3);
     ss << name << "@";
-    // std::string hostname = getHostname();
-    // ss << hostname << ":";
+    std::string hostname = getHostname();
+    ss << hostname << ":";
     ss << getSecretKey();
-    return ss.str();
+    return vectorFromString(ss.str());
+}
+
+int runSetup(Communication* c) {
+
+    std::vector<std::uint8_t> message;
+    if (generateSecretCode()) {
+        std::cerr << "Error generating new secret code" << std::endl;
+        return -1;
+    }
+    std::cout << "credentials for user " << getUsername() << " generated successfully" << std::endl;
+    std::cout << "press [ENTER] when your phone is listening for the credentials" << std::endl;
+    std::cin.get();
+    std::vector<uint8_t> setup = getSetupMessage();
+    std::cout << "Sending setup message..." << std::endl;
+    std::cout << "Message size: " << setup.size() << std::endl;
+
+    bool success = false;
+    c->receive_callback = [&success]() {
+        success = true;
+        std::cout << "Setup data was transferred into phone successfully" << std::endl;
+    };
+    c->send_broadcast(setup);
+
+    bool done = waitUntil(3000, [&success]() {
+        return success;
+    });
+
+    if (!done) {
+        std::cerr << "Timeout waiting for setup data to be transferred into phone" << std::endl;
+        return -1;
+    }
+
+    return 0;
 }

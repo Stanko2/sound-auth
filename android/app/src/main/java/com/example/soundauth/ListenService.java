@@ -6,11 +6,14 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.os.IBinder;
+import android.preference.Preference;
+import android.preference.PreferenceManager;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
@@ -18,7 +21,9 @@ import androidx.core.app.ServiceCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Objects;
+import java.util.Random;
 import java.util.Timer;
 
 public class ListenService extends Service {
@@ -41,6 +46,40 @@ public class ListenService extends Service {
         promoteToForeground();
     }
 
+    private void processMessage(MessageHandler.Message msg) {
+        SharedPreferences p = getSharedPreferences("devices", MODE_PRIVATE);
+        Log.d(TAG, "processMessage: " + new String(msg.data));
+        var intent = new Intent();
+        switch (msg.command) {
+            case 0x01:
+                intent.setAction("device_add");
+                intent.putExtra("device", msg.data);
+                LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+                var addr = getAddress();
+                sender.enqueueMessage(new byte[]{ 0x0,0x0, 0x1, addr[0], addr[1] });
+                break;
+            case 0x02:
+                // handle auth
+                break;
+            default:
+                throw new RuntimeException("Unsupported Message type " + msg.command);
+        }
+    }
+
+    private byte[] getAddress() {
+        SharedPreferences p = getSharedPreferences("devices", MODE_PRIVATE);
+        Random r = new Random();
+        int defaultAddress = r.nextInt( 1 << 16 - 1) + 1;
+        int addr = p.getInt("address", defaultAddress);
+        if (addr == defaultAddress) {
+            p.edit().putInt("address", defaultAddress).apply();
+        }
+        return new byte[] {
+            (byte)(addr >>> 8),
+            (byte)addr
+        };
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         initGGwave(sample_rate, bufferSize);
@@ -50,6 +89,7 @@ public class ListenService extends Service {
         sender = new MessageSender((int) sample_rate, manager);
         receiver.setSender(sender);
         receiver.setMsgHandler((msg)->{
+            processMessage(msg);
             var i = new Intent("message");
             i.putExtra("data", msg.data);
             i.putExtra("command", msg.command);

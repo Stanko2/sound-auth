@@ -31,12 +31,10 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
     AudioControl* audio = new AudioControl();
     a = audio;
 
-    Communication* comm = new Communication(audio);
+    Communication* comm = new Communication(audio, new uint8_t[2]{43, 54});
     std::vector<uint8_t> message;
 
-    message.insert(message.end(), challenge.begin(), challenge.end());
-
-    comm->encode_message(message);
+    comm->send_broadcast(challenge);
     comm->receive_callback = [comm, audio](){
         int ret = comm->get_data(const_cast<std::vector<uint8_t>&>(data));
         success = verify(data, challenge);
@@ -47,9 +45,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
             std::cout << "Authentication failed, trying again..." << std::endl;
             retries ++;
             challenge = get_challenge();
-            comm->encode_message(challenge);
-            auto waveform = comm->get_waveform();
-            audio->queue_audio(waveform);
+            comm->send_broadcast(challenge);
 
             if (retries == MAX_RETRIES) {
                 std::cout << "Maximum retries reached, exiting ..." << std::endl;
@@ -57,9 +53,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
             }
         }
     };
-    std::vector<uint8_t> waveform = comm->get_waveform();
-    audio->queue_audio(waveform);
-    audio->start_loop();
+    comm->send_broadcast(challenge);
 
     std::signal(SIGINT, SIG_DFL);
 

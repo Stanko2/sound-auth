@@ -1,10 +1,19 @@
 package com.example.soundauth;
 
+import android.content.SharedPreferences;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Set;
 
 public class Auth {
+    private Set<DeviceInfo> devices;
+
+    public Auth(Set<DeviceInfo> devices) {
+        this.devices = devices;
+    }
+
     private byte[] getSecretKey() {
         return "12345678".getBytes(StandardCharsets.UTF_8);
     }
@@ -21,5 +30,12 @@ public class Auth {
         } catch (NoSuchAlgorithmException ignored) {
             return null;
         }
+    }
+
+    public boolean processMessage(MessageHandler.Message msg) {
+        for(var d : devices) {
+        }
+
+        return false;
     }
 }

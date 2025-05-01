@@ -29,7 +29,12 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
-
+        <androidx.fragment.app.FragmentContainerView
+            android:id="@+id/deviceList"
+            android:name="com.example.soundauth.deviceList"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent"
+            tools:layout="@layout/fragment_device_info" />
     </LinearLayout>
 
     <LinearLayout

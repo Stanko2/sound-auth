@@ -15,6 +15,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 
 public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChangeListener {
+    private byte[] address = new byte[2];
     public static String TAG = "MessageReceiver";
     private final Queue<byte[]> messages;
     private AudioRecord audioRecord;
@@ -93,6 +94,16 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
         audioRecord = audio;
     }
 
+    private boolean is_message_relevant(byte[] message) {
+        if(message[0] == 0 && message[1] == 0) {
+            return true;
+        }
+        if (message[0] == address[0] && message[1] == address[1]) {
+            return true;
+        }
+        return false;
+    }
+
     private void listenLoop() {
 
         while(isRunning) {
@@ -110,13 +121,11 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
                 byte[] data = decode(audioBuffer);
                 if (data != null) {
                     Log.d(TAG, "MessageReceived: " + new String(data));
+                    if (!is_message_relevant(data)) continue;
                     messages.add(data);
                     msgHandler.OnMessage(new MessageHandler.Message(data));
-                    Auth auth = new Auth();
                     try {
                         Thread.sleep(10);
-                        var res = auth.respond(data);
-                        sender.enqueueMessage(res);
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }

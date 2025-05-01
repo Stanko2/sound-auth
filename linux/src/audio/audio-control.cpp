@@ -1,8 +1,12 @@
 #include "audio-control.h"
 #include <SDL2/SDL_audio.h>
 #include <SDL2/SDL_error.h>
+#include <SDL2/SDL_hints.h>
 #include <SDL2/SDL_timer.h>
 #include <cctype>
+#include <chrono>
+#include <csignal>
+#include <future>
 #include <iostream>
 
 static std::atomic<bool> is_running;
@@ -65,6 +69,7 @@ int AudioControl::getOutputSampleRate() { return playbackSpec.freq; }
 
 AudioControl::AudioControl() {
   SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
+  setenv("SDL_AUDIODRIVER", "pulseaudio", 1);
 
   if (SDL_Init(SDL_INIT_AUDIO) < 0) {
     std::cerr << "Failed to initialize SDL:" << SDL_GetError() << std::endl;
@@ -87,8 +92,8 @@ AudioControl::AudioControl() {
            SDL_GetAudioDeviceName(i, SDL_TRUE));
   }
 
-  init_capture(0);
-  init_playback(0);
+  init_capture(-1);
+  init_playback(-1);
 }
 
 bool AudioControl::init_playback(int devId) {
@@ -196,6 +201,8 @@ void AudioControl::queue_audio(std::vector<uint8_t> &data) {
   free(output_buffer);
   output_buffer = malloc(500 * output_buffer_size);
   memcpy(output_buffer, data.data(), data.size());
+  float duration = (float)output_buffer_size / (float)playbackSpec.freq;
+  start_loop((int)(duration * 1000));
 }
 
 bool AudioControl::loop_step() {
@@ -250,26 +257,38 @@ bool AudioControl::loop_step() {
   return true;
 }
 
-void AudioControl::start_loop() {
-  is_running = true;
-  SDL_PauseAudioDevice(captureDevice, 0);
-  SDL_PauseAudioDevice(playbackDevice, 0);
-  loop();
+void AudioControl::start_loop(int timeout) {
+    std::cout << "Starting loop" << std::endl;
+    is_running = true;
+    SDL_PauseAudioDevice(captureDevice, 0);
+    SDL_PauseAudioDevice(playbackDevice, 0);
+    if (timeout > 0) {
+        loop(timeout);
+        end_loop();
+    } else {
+        loop();
+    }
 
 }
 
 void AudioControl::end_loop() {
   is_running = false;
-  SDL_PauseAudioDevice(captureDevice, 1);
-  SDL_PauseAudioDevice(playbackDevice, 1);
+  // SDL_PauseAudioDevice(captureDevice, 1);
+  // SDL_PauseAudioDevice(playbackDevice, 1);
 }
 
-void AudioControl::loop() {
-  while (is_running) {
-    if (!loop_step()) {
-      break;
+void AudioControl::loop(int timeout) {
+    std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
+    while (is_running) {
+        long long elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+        if (elapsed > timeout && timeout > 0) {
+            std::cerr << "Timeout reached" << std::endl;
+            break;
+        }
+        if (!loop_step()) {
+            break;
+        }
     }
-  }
 }
 
 AudioControl::~AudioControl() {

@@ -60,4 +60,18 @@ If your phone has the service running, it should receive the message and play it
 
 ## Protocol
 
-Message Format `[destination address][command][data]`
+Every device has some sort of "address", which is 2 bytes long. Messages received with wrong address wont be processed. An address of `0` means broadcast. After destination address we need to specify the type of the message, which would be 1 byte. So the message format is `[destination][type][data]`
+
+### Setup
+
+Setup message is used to transfer the address of a computer to the phone. It can be intercepted, so you must ensure that no one listens to it while the transfer is happening. The data format is: `[user]@[computer address][device name]:[secret]`.
+- The `[user]` is the unix user of the computer for whom the
+- `[computer address]` is the address of the computer that the phone should send the data to
+- `[device name]` - user friendly name of the device (hostname)
+- `[secret]` - secret key that is used to generate one time passwords
+
+Phone should answer to this message with its address if he saved the secret successfully
+
+### Authentication
+
+At first computer sends message to phone with a message containing random bytes.

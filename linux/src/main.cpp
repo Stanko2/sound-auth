@@ -3,11 +3,11 @@
 #include "audio/communication.cpp"
 #include "pam/otp.cpp"
 
+#include <cstdint>
 #include <cstdio>
 #include <csignal>
 #include <cstring>
 #include <iostream>
-#include <iterator>
 #include <vector>
 #include "pam/setup.cpp"
 
@@ -20,7 +20,7 @@ void stop (int signal) {
 
 int main(int argc, char** argv) {
     a = new AudioControl();
-    Communication* c = new Communication(a);
+    Communication* c = new Communication(a, new uint8_t[2]{34, 53});
     std::signal(SIGINT, stop);
 
     std::vector<unsigned char> message;
@@ -37,38 +37,19 @@ int main(int argc, char** argv) {
                 if (feof(f) || msg.size() >= 120)
                     break;
             }
-            std::vector<uint8_t> message(msg.begin(), msg.end());
+            message = std::vector<unsigned char>(msg.begin(), msg.end());
+            std::cout << message.size() << std::endl;
+
+            c->send_broadcast(message);
         }
         else if (strncmp(argv[1], "setup", 10) == 0) {
-            if (generateSecretCode()) {
-                std::cerr << "Error generating new secret code" << std::endl;
-                return -1;
-            }
-            std::cout << "credentials for user " << getUsername() << " generated successfully" << std::endl;
-            std::cout << "press [ENTER] when your phone is listening for the credentials" << std::endl;
-            std::string x;
-            std::cin.get();
-            std::string setup = getSetupMessage();
-            std::copy(setup.begin(), setup.end(), std::back_inserter(message));
-            c->encode_message(message);
-            std::vector<uint8_t> waveform = c->get_waveform();
-            a->queue_audio(waveform);
-            c->receive_callback = []() {
-                std::cout << "Setup data was transferred into phone successfully" << std::endl;
-            };
-
-            a->start_loop();
-            return 0;
+            return runSetup(c);
         }
 
     } else {
         message = challenge;
         std::cout << message.size() << std::endl;
     }
-
-    c->encode_message(message);
-    std::vector<uint8_t> waveform = c->get_waveform();
-    a->queue_audio(waveform);
 
     c->receive_callback = [c, challenge]() {
         std::vector<uint8_t> data;
@@ -77,7 +58,6 @@ int main(int argc, char** argv) {
         std::cout << "Verify " << verify(data, challenge) << std::endl;
     };
 
-    a->start_loop();
 
     return 0;
 }

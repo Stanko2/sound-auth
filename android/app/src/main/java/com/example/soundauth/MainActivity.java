@@ -15,9 +15,6 @@ import android.widget.TextView;
 
 import com.example.soundauth.databinding.ActivityMainBinding;
 
-import java.util.HashSet;
-import java.util.List;
-
 public class MainActivity extends AppCompatActivity {
     public static String TAG = "MainActivity";
 
@@ -31,14 +28,10 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        var prefs = getPreferences(MODE_PRIVATE);
-        var devices = prefs.getStringSet("devices", null);
-        if (devices == null) {
-            var tv = new TextView(this);
-            tv.setText("No devices paired");
-            binding.devices.addView(tv);
-        }
-
+//        var fr = getSupportFragmentManager();
+//        var transaction = fr.beginTransaction();
+//        transaction.replace(R.id.deviceList, new deviceList());
+//        transaction.commit();
 
         binding.receive.setOnClickListener((e)-> {
             if (!isMyServiceRunning(ListenService.class)) {
@@ -52,7 +45,6 @@ public class MainActivity extends AppCompatActivity {
                 binding.receive.setText("Start service");
             }
         });
-
     }
 
 
@@ -65,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        LocalBroadcastManager.getInstance(this).registerReceiver(audioMessageReceiver, new IntentFilter("Message"));
+        LocalBroadcastManager.getInstance(this).registerReceiver(audioMessageReceiver, new IntentFilter("message"));
     }
 
     private final BroadcastReceiver audioMessageReceiver = new BroadcastReceiver() {

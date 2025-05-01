@@ -27,7 +27,7 @@ private:
     bool init_capture(int devId);
 
     bool loop_step();
-    void loop();
+    void loop(int timeout = 0);
 
     SDL_AudioSpec playbackSpec;
     SDL_AudioSpec captureSpec;
@@ -43,7 +43,7 @@ public:
     int getOutputSampleRate();
     int getInputSampleRate();
     void setRequiredBufferSize(std::size_t size);
-    void start_loop();
+    void start_loop(int timeout = 0);
     void end_loop();
 
     void queue_audio(std::vector<uint8_t> &data);
