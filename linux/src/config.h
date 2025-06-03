@@ -36,6 +36,7 @@ public:
     void setSecretKey(std::string user, const std::vector<uint8_t>& key) const;
     void setAddress(std::string user, const std::vector<uint8_t>& address) const;
     void setSetting(const char* path, const std::string value) const;
+    std::vector<uint8_t> GetPhoneAddress(std::string user) const;
     const std::vector<uint8_t> getAddress();
 private:
     std::string m_configFile;

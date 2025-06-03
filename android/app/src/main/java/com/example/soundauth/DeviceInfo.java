@@ -23,9 +23,9 @@ public class DeviceInfo {
         this.name = json.getString("name");
     }
 
-    public DeviceInfo(byte[] data) {
+    public DeviceInfo(byte[] data, byte[] address) {
         Log.d("", "DeviceInfo: " + new String(data));
-        this.id = new byte[] {data[0], data[1]};
+        this.id = new byte[] {address[0], address[1]};
         var s = new String(data).substring(2);
         this.name = s.split(":")[0];
         this.secret = s.split(":")[1].getBytes();

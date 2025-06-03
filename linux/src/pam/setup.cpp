@@ -26,7 +26,7 @@ std::vector<uint8_t> getSetupMessage() {
     std::string name = getUsername();
     const std::vector<uint8_t> address = AuthConfig::instance().getAddress();
     std::cout << "Addr Size: " << address.size() << std::endl;
-    uint8_t setupBytes[3] = {0x01, address[0], address[1]};
+    uint8_t setupBytes[1] = {0x01};
     ss.write(reinterpret_cast<const char*>(setupBytes), sizeof(setupBytes));
     ss << name << "@";
     std::string hostname = getHostname();
@@ -60,11 +60,13 @@ int runSetup(Communication* c) {
         if (ret == 5) {
             success = true;
             std::vector<uint8_t> a(2);
-            a[0] = v[3]; a[1] = v[4];
+            a[0] = v[2]; a[1] = v[3];
             AuthConfig::instance().setAddress(getUsername(), a);
             std::cout << "Setup data was transferred into phone successfully" << std::endl;
         }
+
     };
+
     c->send_broadcast(setup);
 
     bool done = waitUntil(3000, [&success]() {

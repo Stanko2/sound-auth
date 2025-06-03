@@ -18,11 +18,19 @@ public class MessageSender implements Runnable {
     private MessageReceiver receiver;
     private int bufferSize;
     private boolean isRunning = true;
+    private byte[] address;
 
     private Queue<byte[]> messagesToSend;
 
-    public synchronized void enqueueMessage(byte[] message) {
-        messagesToSend.add(message);
+    public synchronized void enqueueMessage(byte[] data, byte cmd, byte[] to) {
+        byte[] msg = new byte[data.length + 5];
+        msg[0] = to[0];
+        msg[1] = to[1];
+        msg[2] = address[0];
+        msg[3] = address[1];
+        msg[4] = cmd;
+        System.arraycopy(data, 0, msg, 5, data.length);
+        messagesToSend.add(msg);
     }
 
 
@@ -36,7 +44,7 @@ public class MessageSender implements Runnable {
         isRunning = false;
     }
 
-    public MessageSender(int sampleRate, AudioManager manager) {
+    public MessageSender(int sampleRate, AudioManager manager, byte[] address) {
         this.manager = manager;
         receiver = MessageReceiver.getInstance();
         manager.setMode(AudioManager.MODE_RINGTONE);
@@ -49,6 +57,7 @@ public class MessageSender implements Runnable {
                 .setAudioFormat(new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(sampleRate).setChannelMask(outChannel).build()).setBufferSizeInBytes(bufferSize)
                 .setTransferMode(AudioTrack.MODE_STREAM).build();
         messagesToSend = new LinkedList<>();
+        this.address = address;
     }
 
     @Override

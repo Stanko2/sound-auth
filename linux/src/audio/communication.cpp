@@ -1,5 +1,6 @@
 #include "communication.h"
 #include "../config.h"
+#include "../util.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -105,13 +106,14 @@ int Communication::get_data(std::vector<uint8_t> &out){
 
 int Communication::send_message(std::vector<uint8_t> &data, const uint8_t to[2]) {
     assert(data.size() > 0);
-    std::vector<uint8_t> message(2);
-
+    std::vector<uint8_t> message(4);
+    std::vector<uint8_t> myaddr = AuthConfig::instance().getAddress();
     message[0] = to[0];
     message[1] = to[1];
+    message[2] = myaddr[0];
+    message[3] = myaddr[1];
     message.insert(message.end(), data.begin(), data.end());
-    std::cout << "Message size: " << message.size() << " " << message[2] << std::endl;
-
+    std::cout << "Message: " << vectorToHexString(message) << std::endl;
     int len = encode_message(message);
     if (len > 0) {
         std::vector<uint8_t> waveform = get_waveform();
@@ -124,6 +126,5 @@ int Communication::send_message(std::vector<uint8_t> &data, const uint8_t to[2])
 
 int Communication::send_broadcast(std::vector<uint8_t> &data) {
     assert(data.size() > 0);
-
     return send_message(data, BROADCAST_ADDRESS);
 }

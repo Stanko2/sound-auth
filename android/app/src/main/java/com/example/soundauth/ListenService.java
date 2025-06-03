@@ -47,29 +47,46 @@ public class ListenService extends Service {
     }
 
     private void processMessage(MessageHandler.Message msg) {
-        SharedPreferences p = getSharedPreferences("devices", MODE_PRIVATE);
+        SharedPreferences x = getSharedPreferences("prefs", MODE_PRIVATE);
+        PreferencesManager p = new PreferencesManager(x);
         Log.d(TAG, "processMessage: " + new String(msg.data));
         var intent = new Intent();
+        var addr = getAddress();
         switch (msg.command) {
             case 0x01:
                 intent.setAction("device_add");
                 intent.putExtra("device", msg.data);
-                LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-                var addr = getAddress();
-                sender.enqueueMessage(new byte[]{ 0x0,0x0, 0x1, addr[0], addr[1] });
+                intent.putExtra("id", msg.source);
+                sender.enqueueMessage(new byte[]{}, (byte)0x01, msg.source);
                 break;
             case 0x02:
-                // handle auth
+                if (msg.address[0] != addr[0] || msg.address[1] != addr[1])
+                    break;
+                DeviceInfo dev = null;
+                for(var d : p.getDevices()){
+                    if (d.id[0] == msg.source[0] && d.id[1] == msg.source[1]){
+                        dev = d;
+                    }
+                }
+                Log.d(TAG, "Received login challenge");
+                if (dev == null) {
+                    intent.setAction("error");
+                    intent.putExtra("message", "Received login from unknown device");
+                    break;
+                }
+                Auth auth = new Auth(dev);
+                var res = auth.respond(msg.data);
+                sender.enqueueMessage(res, (byte)0x02, dev.id);
                 break;
             default:
                 intent.setAction("error");
                 intent.putExtra("message", "Unknown Command: " + msg.command);
-                LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
         }
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
 
     private byte[] getAddress() {
-        SharedPreferences p = getSharedPreferences("devices", MODE_PRIVATE);
+        SharedPreferences p = getSharedPreferences("prefs", MODE_PRIVATE);
         Random r = new Random();
         int defaultAddress = r.nextInt( 1 << 16 - 1) + 1;
         int addr = p.getInt("address", defaultAddress);
@@ -86,9 +103,9 @@ public class ListenService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         initGGwave(sample_rate, bufferSize);
         AudioManager manager = getSystemService(AudioManager.class);
-
-        receiver = new MessageReceiver((int)sample_rate, manager);
-        sender = new MessageSender((int) sample_rate, manager);
+        var address = getAddress();
+        receiver = new MessageReceiver((int)sample_rate, manager, address);
+        sender = new MessageSender((int) sample_rate, manager, address);
         receiver.setSender(sender);
         receiver.setMsgHandler((msg)->{
             processMessage(msg);
@@ -112,7 +129,7 @@ public class ListenService extends Service {
 
 
         if (intent.hasExtra("message")) {
-            sender.enqueueMessage(Objects.requireNonNull(intent.getStringExtra("message")).getBytes());
+            sender.enqueueMessage(Objects.requireNonNull(intent.getStringExtra("message")).getBytes(), (byte)0x00, new byte[] {0x00,0x00});
         }
         return Service.START_NOT_STICKY;
     }

@@ -8,14 +8,14 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Set;
 
 public class Auth {
-    private Set<DeviceInfo> devices;
+    private DeviceInfo dev;
 
-    public Auth(Set<DeviceInfo> devices) {
-        this.devices = devices;
+    public Auth(DeviceInfo device) {
+        dev = device;
     }
 
     private byte[] getSecretKey() {
-        return "12345678".getBytes(StandardCharsets.UTF_8);
+        return dev.secret;
     }
 
     public byte[] respond(byte[] challenge) {
@@ -30,12 +30,5 @@ public class Auth {
         } catch (NoSuchAlgorithmException ignored) {
             return null;
         }
-    }
-
-    public boolean processMessage(MessageHandler.Message msg) {
-        for(var d : devices) {
-        }
-
-        return false;
     }
 }

@@ -200,7 +200,9 @@ void AudioControl::queue_audio(std::vector<uint8_t> &data) {
     output_buffer = malloc(500 * output_buffer_size);
     memcpy(output_buffer, data.data(), data.size());
     float duration = (float)output_buffer_size / (float)playbackSpec.freq;
-    start_loop((int)(duration * 1000));
+    if (!is_running){
+        start_loop((int)(duration * 1000));
+    }
 }
 
 bool AudioControl::loop_step() {
@@ -255,7 +257,7 @@ bool AudioControl::loop_step() {
 }
 
 void AudioControl::start_loop(int timeout) {
-    std::cout << "Starting loop" << std::endl;
+    std::cout << "Starting loop with timeout: " << timeout << std::endl;
     is_running = true;
     SDL_PauseAudioDevice(captureDevice, 0);
     SDL_PauseAudioDevice(playbackDevice, 0);

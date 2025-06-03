@@ -34,44 +34,26 @@ import com.example.soundauth.databinding.FragmentDeviceInfoBinding;
 public class deviceList extends Fragment {
     private static final String TAG = "DeviceList";
     private FragmentDeviceInfoBinding binding = null;
-    private SharedPreferences p;
+    private PreferencesManager p;
 
 
     public deviceList() {}
 
-    public static Set<DeviceInfo> getDevices(SharedPreferences p) {
-        var r = p.getStringSet("deviceList", new HashSet<>());
-        var ret = new HashSet<DeviceInfo>();
-        for (var i: r) {
-            Log.d(TAG, "getDevices: " + i);
-            try {
-                JSONObject j = new JSONObject(i);
-                ret.add(new DeviceInfo(j));
-            } catch (JSONException ignored) {
-            }
-        }
-        return ret;
-    }
 
-    public static void saveDevices(SharedPreferences p, Set<DeviceInfo> devices) {
-        var s = new HashSet<String>();
-        for(var d : devices) {
-            s.add(d.json());
-        }
-        p.edit().putStringSet("deviceList", s).apply();
-    }
+
+
 
     private void removeDevice(DeviceInfo d) {
-        var set = getDevices(p);
+        var set = p.getDevices();
         set.remove(d);
-        saveDevices(p, set);
+        p.saveDevices(set);
         updateUI();
     }
 
     public void addDevice(DeviceInfo d) {
-        var set = getDevices(p);
+        var set = p.getDevices();
         set.add(d);
-        saveDevices(p, set);
+        p.saveDevices(set);
         updateUI();
     }
 
@@ -81,7 +63,7 @@ public class deviceList extends Fragment {
     }
 
     private void updateUI() {
-        var devices = getDevices(p);
+        var devices = p.getDevices();
         var ctx = requireContext();
         LinearLayout l = binding.list;
         var p = new ViewGroup.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, WRAP_CONTENT);
@@ -126,7 +108,8 @@ public class deviceList extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         binding = FragmentDeviceInfoBinding.inflate(inflater, container, false);
-        p = requireActivity().getPreferences(Context.MODE_PRIVATE);
+        SharedPreferences x = requireActivity().getSharedPreferences("prefs", Context.MODE_PRIVATE);
+        p = new PreferencesManager(x);
 
         return binding.getRoot();
     }
@@ -153,8 +136,10 @@ public class deviceList extends Fragment {
         @Override
         public void onReceive(Context context, Intent intent) {
             var data = intent.getByteArrayExtra("device");
+            var address = intent.getByteArrayExtra("id");
             assert data != null;
-            var dev = new DeviceInfo(data);
+            assert address != null;
+            var dev = new DeviceInfo(data, address);
             Log.d(TAG, "newDevice: " + dev);
 
             addDevice(dev);

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
 #include <openssl/bn.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
@@ -11,14 +12,17 @@
 #include <unistd.h>
 #include <vector>
 #include "../config.h"
+#include "../audio/communication.h"
+#include "../util.h"
 
 #define CHALLENGE_SIZE 16
 #define SECRET_KEY_SIZE 16
 #define CONFIG_LOCATION "./config"
 
-std::vector<unsigned char> get_challenge() {
-    std::vector<unsigned char> ret(CHALLENGE_SIZE, 0);
-    RAND_bytes(ret.data(), CHALLENGE_SIZE);
+std::vector<uint8_t> get_challenge() {
+    std::vector<uint8_t> ret(CHALLENGE_SIZE+1, 0);
+    ret[0] = 0x02;
+    RAND_bytes(ret.data()+1, CHALLENGE_SIZE);
 
     return ret;
 }
@@ -95,4 +99,33 @@ bool verify(std::vector<uint8_t> password, std::vector<uint8_t> challenge) {
         }
     }
     return true;
+}
+bool runAuth(Communication* c) {
+    AuthConfig cfg = AuthConfig::instance();
+    std::vector<uint8_t> challenge = get_challenge();
+    std::vector<uint8_t> message;
+    bool running = true;
+    std::vector<uint8_t> dest = cfg.GetPhoneAddress(getUsername());
+    if (dest.data() == NULL) {
+        std::cout << "You need to run 'sound-auth setup' first to generate key and transfer it to phone" << std::endl;
+        return false;
+    }
+
+    c->send_message(challenge, dest.data());
+    c->receive_callback = [challenge, c, &running](){
+        std::vector<uint8_t> data;
+        int ret = c->get_data(const_cast<std::vector<uint8_t>&>(data));
+        bool success = verify(data, challenge);
+
+        if (success) {
+            std::cout << "Authentication successful" << std::endl;
+        } else {
+            std::cout << "Authentication failed" << std::endl;
+        }
+        running = false;
+    };
+
+    return waitUntil(3000, [&running](){
+        return running;
+    });
 }

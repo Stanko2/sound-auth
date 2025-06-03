@@ -15,7 +15,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 
 public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChangeListener {
-    private byte[] address = new byte[2];
+    private final byte[] address;
     public static String TAG = "MessageReceiver";
     private final Queue<byte[]> messages;
     private AudioRecord audioRecord;
@@ -58,7 +58,7 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
 
     private native byte[] decode(short[] audioData) throws SoundProcessException;
 
-    public MessageReceiver(int sampleRate, AudioManager manager) {
+    public MessageReceiver(int sampleRate, AudioManager manager, byte[] address) {
         audioManager = manager;
         this.sampleRate = sampleRate;
         messages = new LinkedList<>();
@@ -66,6 +66,7 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
             throw new RuntimeException("Multiple Receivers not allowed");
         }
         instance = this;
+        this.address = address;
     }
 
     @Override
@@ -94,6 +95,17 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
         audioRecord = audio;
     }
 
+    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
+    public static String bytesToHex(byte[] bytes) {
+        char[] hexChars = new char[bytes.length * 2];
+        for (int j = 0; j < bytes.length; j++) {
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
+            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
+        }
+        return new String(hexChars);
+    }
+
     private boolean is_message_relevant(byte[] message) {
         if(message[0] == 0 && message[1] == 0) {
             return true;
@@ -101,6 +113,7 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
         if (message[0] == address[0] && message[1] == address[1]) {
             return true;
         }
+
         return false;
     }
 
@@ -120,7 +133,7 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
             try {
                 byte[] data = decode(audioBuffer);
                 if (data != null) {
-                    Log.d(TAG, "MessageReceived: " + new String(data));
+                    Log.d(TAG, "MessageReceived: " + bytesToHex(data) + ", address " + bytesToHex(address));
                     if (!is_message_relevant(data)) continue;
                     messages.add(data);
                     msgHandler.OnMessage(new MessageHandler.Message(data));

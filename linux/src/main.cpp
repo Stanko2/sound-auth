@@ -19,19 +19,26 @@ void stop (int signal) {
     a->end_loop();
 }
 
+void help() {
+    std::cout << "sound-auth usage: sound-auth [COMMAND]" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Commands:" << std::endl;
+    std::cout << "  send [FILE] sends the [FILE] to all devices" << std::endl;
+    std::cout << "  setup       generates keys and broadcasts them." << std::endl;
+    std::cout << "  test        tries to run whole authentication process for current user" << std::endl;
+}
+
 int main(int argc, char** argv) {
     a = new AudioControl();
-    Communication* c = new Communication(a, new uint8_t[2]{34, 53});
+    AuthConfig config = AuthConfig::instance();
+    Communication* c = new Communication(a, config.getAddress().data());
     std::signal(SIGINT, stop);
 
-    AuthConfig config = AuthConfig::instance();
-
-    // std::cout << "Protocol: " << config.getProtocol() << std::endl;
 
     std::vector<unsigned char> message;
-    std::vector<unsigned char> challenge = get_challenge();
+    // std::vector<unsigned char> challenge = get_challenge();
 
-
+    int ret = 0;
     if(argc > 1) {
         std::string msg;
         if (strncmp(argv[1], "send", 10) == 0) {
@@ -48,25 +55,28 @@ int main(int argc, char** argv) {
             c->send_broadcast(message);
         }
         else if (strncmp(argv[1], "setup", 10) == 0) {
-            return runSetup(c);
+            ret = runSetup(c);
         } else if (strncmp(argv[1], "list", 10) == 0) {
             a->listAllDevices();
-            delete a;
-            return 0;
+        } else if (strncmp(argv[1], "test", 10) == 0) {
+            bool r = runAuth(c);
+            ret = !r;
         }
 
     } else {
-        message = challenge;
-        std::cout << message.size() << std::endl;
+        help();
+        return 0;
     }
+    a->end_loop();
+    delete a;
 
-    c->receive_callback = [c, challenge]() {
-        std::vector<uint8_t> data;
+    // c->receive_callback = [c, challenge]() {
+    //     std::vector<uint8_t> data;
 
-        int len = c->get_data(data);
-        std::cout << "Verify " << verify(data, challenge) << std::endl;
-    };
+    //     int len = c->get_data(data);
+    //     std::cout << "Verify " << verify(data, challenge) << std::endl;
+    // };
 
 
-    return 0;
+    return ret;
 }

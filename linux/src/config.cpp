@@ -181,3 +181,10 @@ void AuthConfig::setAddress(std::string user, const std::vector<uint8_t>& addres
     std::string hexAddr = vectorToHexString(address);
     setSetting(path.c_str(), hexAddr);
 }
+
+std::vector<uint8_t> AuthConfig::GetPhoneAddress(std::string user) const {
+    std::string addr;
+    std::string path = user + ".address";
+    lookupStr(path.c_str(), addr, "");
+    return hexStringToVector(addr);
+}

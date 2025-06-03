@@ -6,7 +6,7 @@
 #include <sstream>
 #include <iomanip>
 
-int waitUntil(int timeout, std::function<bool()> condition);
+bool waitUntil(int timeout, std::function<bool()> condition);
 
 std::vector<uint8_t> vectorFromString(const std::string& str);
 
