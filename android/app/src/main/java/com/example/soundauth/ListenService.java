@@ -62,7 +62,9 @@ public class ListenService extends Service {
                 // handle auth
                 break;
             default:
-                throw new RuntimeException("Unsupported Message type " + msg.command);
+                intent.setAction("error");
+                intent.putExtra("message", "Unknown Command: " + msg.command);
+                LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
         }
     }
 

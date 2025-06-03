@@ -7,6 +7,7 @@
 #include <security/pam_ext.h>
 #include <vector>
 #include "../audio/audio-control.h"
+#include "../config.h"
 #include "otp.cpp"
 #include <iostream>
 
@@ -29,9 +30,11 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
     std::signal(SIGINT, stop);
     challenge = get_challenge();
     AudioControl* audio = new AudioControl();
+    AuthConfig config = AuthConfig::instance();
+    std::cout << "Using protocol: " << config.getProtocol() << std::endl;
     a = audio;
 
-    Communication* comm = new Communication(audio, new uint8_t[2]{43, 54});
+    Communication* comm = new Communication(audio, config.getAddress().data());
     std::vector<uint8_t> message;
 
     comm->send_broadcast(challenge);

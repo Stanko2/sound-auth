@@ -36,7 +36,7 @@ private:
 
     std::thread* loop_thread;
 public:
-
+    void listAllDevices();
     void (*capture_callback)(uint8_t* data, std::size_t data_size) = NULL;
     GGWave::SampleFormat getOutputSampleFormat();
     GGWave::SampleFormat getInputSampleFormat();

@@ -2,6 +2,7 @@
 #include "audio/audio-control.cpp"
 #include "audio/communication.cpp"
 #include "pam/otp.cpp"
+#include "config.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -22,6 +23,10 @@ int main(int argc, char** argv) {
     a = new AudioControl();
     Communication* c = new Communication(a, new uint8_t[2]{34, 53});
     std::signal(SIGINT, stop);
+
+    AuthConfig config = AuthConfig::instance();
+
+    // std::cout << "Protocol: " << config.getProtocol() << std::endl;
 
     std::vector<unsigned char> message;
     std::vector<unsigned char> challenge = get_challenge();
@@ -44,6 +49,10 @@ int main(int argc, char** argv) {
         }
         else if (strncmp(argv[1], "setup", 10) == 0) {
             return runSetup(c);
+        } else if (strncmp(argv[1], "list", 10) == 0) {
+            a->listAllDevices();
+            delete a;
+            return 0;
         }
 
     } else {

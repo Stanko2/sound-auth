@@ -1,10 +1,8 @@
 #pragma once
-#include "base64.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <fstream>
 #include <openssl/bn.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
@@ -12,6 +10,7 @@
 #include <openssl/rand.h>
 #include <unistd.h>
 #include <vector>
+#include "../config.h"
 
 #define CHALLENGE_SIZE 16
 #define SECRET_KEY_SIZE 16
@@ -44,31 +43,9 @@ std::string getHostname () {
     return s;
 }
 
-std::string getSecretKey() {
-    std::fstream f;
-    std::string key = "";
-    f.open(CONFIG_LOCATION);
-    if (!f.is_open()) {
-        throw "File not opened";
-    }
-    std::string username = getUsername();
-    while(!f.eof()) {
-        std::string line;
-        std::getline(f, line);
-        if (line.compare(0, username.size(), username) == 0) {
-            key = line.substr(username.size()+1);
-            f.close();
-            return boost::beast::detail::base64_decode(key);
-        }
-    }
-
-    f.close();
-    return NULL;
-}
-
 std::vector<unsigned char> generate(std::vector<unsigned char>& challenge) {
     std::vector<unsigned char> message(SECRET_KEY_SIZE + CHALLENGE_SIZE, 0);
-    auto key = getSecretKey();
+    auto key = AuthConfig::instance().getSecretKey(getUsername().c_str());
     for (size_t i = 0; i < CHALLENGE_SIZE; i++) {
         message[i] = challenge[i];
     }

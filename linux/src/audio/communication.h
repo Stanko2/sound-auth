@@ -17,6 +17,7 @@ private:
     std::vector<uint8_t> received_data;
     std::vector<uint8_t> waveform;
     char address[2];
+    ggwave_ProtocolId protocol_id;
     bool is_valid(GGWave::TxRxData& data);
     int encode_message(std::vector<uint8_t> &message);
     std::vector<uint8_t> get_waveform();

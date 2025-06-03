@@ -1,59 +1,51 @@
 #pragma once
 #include "otp.cpp"
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <fstream>
 #include <iostream>
 #include <openssl/rand.h>
 #include <sstream>
 #include <string>
+#include <sys/types.h>
 #include <unistd.h>
 #include <vector>
 #include "../audio/communication.h"
-#include "base64.hpp"
-#include "../util.cpp"
+#include "../util.h"
+#include "../config.h"
 
 
 int generateSecretCode() {
-    std::string key = getSecretKey();
-    if (key != "") {
-        return 0;
-    }
-    std::ofstream output(CONFIG_LOCATION, std::fstream::out);
-    if (!output.is_open()) {
-        std::cerr << "Error writing secret code to file" << std::endl;
-        return -1;
-    }
-
     std::vector<unsigned char> secret(SECRET_KEY_SIZE);
     RAND_bytes(secret.data(), SECRET_KEY_SIZE);
-    std::string encoded = boost::beast::detail::base64_encode(std::string(secret.begin(), secret.end()));
     std::string name = getUsername();
-    output << name << ":" << encoded << std::endl;
-    output.close();
+    AuthConfig::instance().setSecretKey(name, secret);
     return 0;
 }
 
 std::vector<uint8_t> getSetupMessage() {
-    std::stringstream ss;
+    std::ostringstream ss;
     std::string name = getUsername();
-    ss.write(new char[3] {1, 35, 43}, 3);
+    const std::vector<uint8_t> address = AuthConfig::instance().getAddress();
+    std::cout << "Addr Size: " << address.size() << std::endl;
+    uint8_t setupBytes[3] = {0x01, address[0], address[1]};
+    ss.write(reinterpret_cast<const char*>(setupBytes), sizeof(setupBytes));
     ss << name << "@";
     std::string hostname = getHostname();
     ss << hostname << ":";
-    ss << getSecretKey();
+    std::cout << ss.str().size() << std::endl;
+    auto key = AuthConfig::instance().getSecretKey(name.c_str());
+    if (key.size() == 0){
+        std::cout << "credentials for user " << getUsername() << " generated successfully" << std::endl;
+        generateSecretCode();
+        key = AuthConfig::instance().getSecretKey(name.c_str());
+    }
+    ss << stringFromVector(key);
+    printHex(ss.str());
     return vectorFromString(ss.str());
 }
 
 int runSetup(Communication* c) {
 
     std::vector<std::uint8_t> message;
-    if (generateSecretCode()) {
-        std::cerr << "Error generating new secret code" << std::endl;
-        return -1;
-    }
-    std::cout << "credentials for user " << getUsername() << " generated successfully" << std::endl;
     std::cout << "press [ENTER] when your phone is listening for the credentials" << std::endl;
     std::cin.get();
     std::vector<uint8_t> setup = getSetupMessage();
@@ -61,9 +53,17 @@ int runSetup(Communication* c) {
     std::cout << "Message size: " << setup.size() << std::endl;
 
     bool success = false;
-    c->receive_callback = [&success]() {
-        success = true;
-        std::cout << "Setup data was transferred into phone successfully" << std::endl;
+    c->receive_callback = [&success, c]() {
+        std::vector<uint8_t> v;
+        int ret = c->get_data(const_cast<std::vector<uint8_t>&>(v));
+        printHex(stringFromVector(v));
+        if (ret == 5) {
+            success = true;
+            std::vector<uint8_t> a(2);
+            a[0] = v[3]; a[1] = v[4];
+            AuthConfig::instance().setAddress(getUsername(), a);
+            std::cout << "Setup data was transferred into phone successfully" << std::endl;
+        }
     };
     c->send_broadcast(setup);
 

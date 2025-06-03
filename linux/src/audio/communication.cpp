@@ -1,4 +1,5 @@
 #include "communication.h"
+#include "../config.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -19,6 +20,8 @@ Communication::Communication(AudioControl* audio, const uint8_t address[2]) {
     parameters.sampleRateOut = audio->getOutputSampleRate();
     parameters.payloadLength = -1;
     ggWave = new GGWave(parameters);
+    protocol_id = AuthConfig::instance().getProtocol();
+
     comm_instance = this;
     this->address[0] = address[0];
     this->address[1] = address[1];
@@ -75,7 +78,7 @@ void Communication::samples_received(uint8_t* samples, std::size_t sample_size)
 
 int Communication::encode_message(std::vector<uint8_t> &message) {
 
-    ggWave->init(message.size(), (const char *) message.data(), PROTOCOL, 50);
+    ggWave->init(message.size(), (const char *) message.data(), protocol_id, 50);
     std::size_t len = ggWave->encode();
     assert(len > 0);
 

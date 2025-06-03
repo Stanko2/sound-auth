@@ -12,6 +12,7 @@ import android.content.IntentFilter;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.example.soundauth.databinding.ActivityMainBinding;
 
@@ -27,11 +28,6 @@ public class MainActivity extends AppCompatActivity {
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
-
-//        var fr = getSupportFragmentManager();
-//        var transaction = fr.beginTransaction();
-//        transaction.replace(R.id.deviceList, new deviceList());
-//        transaction.commit();
 
         binding.receive.setOnClickListener((e)-> {
             if (!isMyServiceRunning(ListenService.class)) {
@@ -58,12 +54,20 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         LocalBroadcastManager.getInstance(this).registerReceiver(audioMessageReceiver, new IntentFilter("message"));
+        LocalBroadcastManager.getInstance(this).registerReceiver(errorReceiver, new IntentFilter("error"));
     }
 
     private final BroadcastReceiver audioMessageReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             Log.d(TAG, "onReceive: " + intent.getStringExtra("message"));
+        }
+    };
+
+    private final BroadcastReceiver errorReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Toast.makeText(context, intent.getStringExtra("message"), Toast.LENGTH_SHORT).show();
         }
     };
 
