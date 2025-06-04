@@ -45,8 +45,7 @@ public:
     void setRequiredBufferSize(std::size_t size);
     void start_loop(int timeout = 0);
     void end_loop();
-
-    void queue_audio(std::vector<uint8_t> &data);
+    void queue_audio(std::vector<uint8_t> &data, bool waitForResponse);
 
     AudioControl();
     ~AudioControl();

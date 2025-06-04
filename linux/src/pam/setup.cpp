@@ -67,16 +67,16 @@ int runSetup(Communication* c) {
 
     };
 
-    c->send_broadcast(setup);
+    c->send_broadcast(setup, false);
+    // bool done = waitUntil(3000, [&success]() {
+    //     return success;
+    // });
 
-    bool done = waitUntil(3000, [&success]() {
-        return success;
-    });
 
-    if (!done) {
-        std::cerr << "Timeout waiting for setup data to be transferred into phone" << std::endl;
-        return -1;
-    }
+    // if (!done) {
+    //     std::cerr << "Timeout waiting for setup data to be transferred into phone" << std::endl;
+    //     return -1;
+    // }
 
     return 0;
 }

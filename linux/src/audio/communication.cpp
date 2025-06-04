@@ -47,7 +47,7 @@ bool Communication::is_valid(GGWave::TxRxData& data) {
         return true;
     }
     // to me
-    if (data[0] == address[0] && data[1] == address[1]) {
+    if (data[0] == (uint8_t)address[0] && data[1] == (uint8_t)address[1]) {
         return true;
     }
     return false;
@@ -57,20 +57,21 @@ void Communication::samples_received(uint8_t* samples, std::size_t sample_size)
 {
     bool success = ggWave->decode(samples, sample_size);
     GGWave::TxRxData message;
-
     if (!success) {
         std::cerr << "Failed to decode message" << std::endl;
     } else{
         int len = ggWave->rxTakeData(message);
         if (len > 0) {
-            if(!is_valid(message)) return;
             std::cout << "Received message: ";
             for (auto byte : message) {
                 std::cout << std::hex << static_cast<int>(byte) << " ";
             }
+            std::cout << std::dec;
+            if(!is_valid(message)) return;
             std::cout << std::endl;
             received_data.insert(received_data.end(), message.begin(), message.end());
             if (receive_callback != NULL) {
+                std::cout << "Message Accepted" << std::endl;
                 receive_callback();
             }
         }
@@ -104,7 +105,7 @@ int Communication::get_data(std::vector<uint8_t> &out){
     return out.size();
 }
 
-int Communication::send_message(std::vector<uint8_t> &data, const uint8_t to[2]) {
+int Communication::send_message(std::vector<uint8_t> &data, const uint8_t to[2], bool wait) {
     assert(data.size() > 0);
     std::vector<uint8_t> message(4);
     std::vector<uint8_t> myaddr = AuthConfig::instance().getAddress();
@@ -117,14 +118,18 @@ int Communication::send_message(std::vector<uint8_t> &data, const uint8_t to[2])
     int len = encode_message(message);
     if (len > 0) {
         std::vector<uint8_t> waveform = get_waveform();
-        audio->queue_audio(waveform);
+        audio->queue_audio(waveform, wait);
         return 0;
     }
 
     return -1;
 }
 
-int Communication::send_broadcast(std::vector<uint8_t> &data) {
+void Communication::stop() {
+    audio->end_loop();
+}
+
+int Communication::send_broadcast(std::vector<uint8_t> &data, bool wait) {
     assert(data.size() > 0);
-    return send_message(data, BROADCAST_ADDRESS);
+    return send_message(data, BROADCAST_ADDRESS, wait);
 }

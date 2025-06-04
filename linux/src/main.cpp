@@ -3,12 +3,11 @@
 #include "audio/communication.cpp"
 #include "pam/otp.cpp"
 #include "config.h"
-
-#include <cstdint>
-#include <cstdio>
 #include <csignal>
-#include <cstring>
+#include <cstdint>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <vector>
 #include "pam/setup.cpp"
 
@@ -40,19 +39,22 @@ int main(int argc, char** argv) {
 
     int ret = 0;
     if(argc > 1) {
-        std::string msg;
         if (strncmp(argv[1], "send", 10) == 0) {
-            FILE* f = fopen(argv[1], "r");
-            while (1) {
-                msg += fgetc(f);
-
-                if (feof(f) || msg.size() >= 120)
-                    break;
+            std::ifstream f(argv[2], std::ios::in | std::ios::binary);
+            if(!f) {
+                std::cerr << "Could not find file: " << argv[1] << std::endl;
+                ret = 1;
             }
-            message = std::vector<unsigned char>(msg.begin(), msg.end());
-            std::cout << message.size() << std::endl;
+            else {
+                std::ostringstream oss;
+                oss << f.rdbuf();
+                std::string msg = oss.str();
+                f.close();
+                message = std::vector<uint8_t>(msg.begin(), msg.end());
 
-            c->send_broadcast(message);
+                c->send_broadcast(message);
+                ret = 0;
+            }
         }
         else if (strncmp(argv[1], "setup", 10) == 0) {
             ret = runSetup(c);
@@ -69,14 +71,6 @@ int main(int argc, char** argv) {
     }
     a->end_loop();
     delete a;
-
-    // c->receive_callback = [c, challenge]() {
-    //     std::vector<uint8_t> data;
-
-    //     int len = c->get_data(data);
-    //     std::cout << "Verify " << verify(data, challenge) << std::endl;
-    // };
-
 
     return ret;
 }

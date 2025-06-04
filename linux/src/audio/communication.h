@@ -23,10 +23,11 @@ private:
     std::vector<uint8_t> get_waveform();
 
 public:
+    void stop();
     void samples_received(uint8_t* samples, std::size_t samples_size);
     int get_data(std::vector<uint8_t> &out);
-    int send_message(std::vector<uint8_t> &message, const uint8_t to[2]);
-    int send_broadcast(std::vector<uint8_t> &message);
+    int send_message(std::vector<uint8_t> &message, const uint8_t to[2], bool wait = true);
+    int send_broadcast(std::vector<uint8_t> &message, bool wait = true);
     Communication (AudioControl* audio, const uint8_t address[2]);
     ~Communication();
     std::function<void(void)> receive_callback = NULL;

@@ -50,6 +50,8 @@ std::string getHostname () {
 std::vector<unsigned char> generate(std::vector<unsigned char>& challenge) {
     std::vector<unsigned char> message(SECRET_KEY_SIZE + CHALLENGE_SIZE, 0);
     auto key = AuthConfig::instance().getSecretKey(getUsername().c_str());
+    std::cout << "Key  : " << vectorToHexString(key) << std::endl;
+    std::cout << "Chall: " << vectorToHexString(challenge) << std::endl;
     for (size_t i = 0; i < CHALLENGE_SIZE; i++) {
         message[i] = challenge[i];
     }
@@ -93,8 +95,11 @@ std::vector<unsigned char> generate(std::vector<unsigned char>& challenge) {
 
 bool verify(std::vector<uint8_t> password, std::vector<uint8_t> challenge) {
     std::vector<unsigned char> r = generate(challenge);
+    std::cout << "Hash: " << vectorToHexString(r) << std::endl;
+    std::cout << "Pass: " << vectorToHexString(password) << std::endl;
+
     for (size_t i = 0; i < r.size(); i++) {
-        if (r[i] != password[i]) {
+        if (r[i] != password[i + 5]) {
             return false;
         }
     }
@@ -111,21 +116,24 @@ bool runAuth(Communication* c) {
         return false;
     }
 
-    c->send_message(challenge, dest.data());
-    c->receive_callback = [challenge, c, &running](){
+    c->receive_callback = [&challenge, c, &running](){
         std::vector<uint8_t> data;
         int ret = c->get_data(const_cast<std::vector<uint8_t>&>(data));
+        challenge.erase(challenge.begin());
         bool success = verify(data, challenge);
 
         if (success) {
             std::cout << "Authentication successful" << std::endl;
+            running = false;
         } else {
             std::cout << "Authentication failed" << std::endl;
         }
-        running = false;
+        c->stop();
     };
+    c->send_message(challenge, dest.data());
 
-    return waitUntil(3000, [&running](){
-        return running;
-    });
+    return !running;
+    // return waitUntil(3000, [&running](){
+    //     return running;
+    // });
 }

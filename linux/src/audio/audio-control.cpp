@@ -4,9 +4,7 @@
 #include <SDL2/SDL_error.h>
 #include <SDL2/SDL_hints.h>
 #include <SDL2/SDL_timer.h>
-#include <cctype>
 #include <chrono>
-#include <csignal>
 #include <iostream>
 
 static std::atomic<bool> is_running;
@@ -194,14 +192,16 @@ void AudioControl::setRequiredBufferSize(size_t size) {
     output_buffer = malloc(500 * required_buffer_size);
 }
 
-void AudioControl::queue_audio(std::vector<uint8_t> &data) {
+void AudioControl::queue_audio(std::vector<uint8_t> &data, bool waitForResponse) {
     output_buffer_size = data.size();
     free(output_buffer);
     output_buffer = malloc(500 * output_buffer_size);
     memcpy(output_buffer, data.data(), data.size());
     float duration = (float)output_buffer_size / (float)playbackSpec.freq;
-    if (!is_running){
+    if (!waitForResponse){
         start_loop((int)(duration * 1000));
+    } else {
+        start_loop();
     }
 }
 
