@@ -50,8 +50,8 @@ std::string getHostname () {
 std::vector<unsigned char> generate(std::vector<unsigned char>& challenge) {
     std::vector<unsigned char> message(SECRET_KEY_SIZE + CHALLENGE_SIZE, 0);
     auto key = AuthConfig::instance().getSecretKey(getUsername().c_str());
-    std::cout << "Key  : " << vectorToHexString(key) << std::endl;
-    std::cout << "Chall: " << vectorToHexString(challenge) << std::endl;
+    // std::cout << "Key  : " << vectorToHexString(key) << std::endl;
+    // std::cout << "Chall: " << vectorToHexString(challenge) << std::endl;
     for (size_t i = 0; i < CHALLENGE_SIZE; i++) {
         message[i] = challenge[i];
     }
@@ -95,8 +95,8 @@ std::vector<unsigned char> generate(std::vector<unsigned char>& challenge) {
 
 bool verify(std::vector<uint8_t> password, std::vector<uint8_t> challenge) {
     std::vector<unsigned char> r = generate(challenge);
-    std::cout << "Hash: " << vectorToHexString(r) << std::endl;
-    std::cout << "Pass: " << vectorToHexString(password) << std::endl;
+    // std::cout << "Hash: " << vectorToHexString(r) << std::endl;
+    // std::cout << "Pass: " << vectorToHexString(password) << std::endl;
 
     for (size_t i = 0; i < r.size(); i++) {
         if (r[i] != password[i + 5]) {

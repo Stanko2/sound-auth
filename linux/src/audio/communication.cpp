@@ -62,16 +62,16 @@ void Communication::samples_received(uint8_t* samples, std::size_t sample_size)
     } else{
         int len = ggWave->rxTakeData(message);
         if (len > 0) {
-            std::cout << "Received message: ";
-            for (auto byte : message) {
-                std::cout << std::hex << static_cast<int>(byte) << " ";
-            }
-            std::cout << std::dec;
+            // std::cout << "Received message: ";
+            // for (auto byte : message) {
+            //     std::cout << std::hex << static_cast<int>(byte) << " ";
+            // }
+            // std::cout << std::dec;
             if(!is_valid(message)) return;
             std::cout << std::endl;
             received_data.insert(received_data.end(), message.begin(), message.end());
             if (receive_callback != NULL) {
-                std::cout << "Message Accepted" << std::endl;
+                // std::cout << "Message Accepted" << std::endl;
                 receive_callback();
             }
         }
@@ -114,7 +114,7 @@ int Communication::send_message(std::vector<uint8_t> &data, const uint8_t to[2],
     message[2] = myaddr[0];
     message[3] = myaddr[1];
     message.insert(message.end(), data.begin(), data.end());
-    std::cout << "Message: " << vectorToHexString(message) << std::endl;
+    // std::cout << "Message: " << vectorToHexString(message) << std::endl;
     int len = encode_message(message);
     if (len > 0) {
         std::vector<uint8_t> waveform = get_waveform();

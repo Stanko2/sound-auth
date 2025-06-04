@@ -52,7 +52,7 @@ This should build 2 files - `pam_sound_auth.so` and `sound_auth` binary. The `so
 auth    sufficient      pam_sound_auth.so
 ```
 
-3. You also need to copy the `sound-auth.cfg` file to `/etc` and make it readable by only root. It contains secret keys for all users.
+3. You also need to copy the `sound-auth.cfg` file to `/etc` and make it readable by only root. It will contain secret keys for all users.
 
 ##### Configuration file
 

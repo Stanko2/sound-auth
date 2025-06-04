@@ -219,7 +219,7 @@ bool AudioControl::loop_step() {
     // we have some data to send
     if (output_buffer_size > 0) {
         float duration = (float)output_buffer_size / (float)playbackSpec.freq;
-        std::cout << "Sending message, duration: " << duration << "s" << std::endl;
+        // std::cout << "Sending message, duration: " << duration << "s" << std::endl;
         SDL_QueueAudio(playbackDevice, output_buffer, output_buffer_size);
         output_buffer_size = 0;
         output_buffer = NULL;
@@ -257,7 +257,7 @@ bool AudioControl::loop_step() {
 }
 
 void AudioControl::start_loop(int timeout) {
-    std::cout << "Starting loop with timeout: " << timeout << std::endl;
+    // std::cout << "Starting loop with timeout: " << timeout << std::endl;
     is_running = true;
     SDL_PauseAudioDevice(captureDevice, 0);
     SDL_PauseAudioDevice(playbackDevice, 0);

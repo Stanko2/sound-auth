@@ -6,7 +6,7 @@
 #include "ggwave/ggwave.h"
 #include <string>
 #include <android/log.h>
-#define PROTOCOL GGWAVE_PROTOCOL_AUDIBLE_FASTEST
+#define PROTOCOL GGWAVE_PROTOCOL_ULTRASOUND_FASTEST
 
 
 ggwave_Instance ggWave;
