@@ -16,7 +16,7 @@
 #include "../util.h"
 
 #define CHALLENGE_SIZE 16
-#define SECRET_KEY_SIZE 16
+#define SECRET_KEY_SIZE 32
 #define CONFIG_LOCATION "./config"
 
 std::vector<uint8_t> get_challenge() {

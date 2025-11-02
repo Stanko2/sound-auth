@@ -11,7 +11,9 @@
 #include "../audio/communication.h"
 #include "../util.h"
 #include "../config.h"
+#include "./dh.cpp"
 
+DHKey* setupKey;
 
 int generateSecretCode() {
     std::vector<unsigned char> secret(SECRET_KEY_SIZE);
@@ -24,6 +26,7 @@ int generateSecretCode() {
 std::vector<uint8_t> getSetupMessage() {
     std::ostringstream ss;
     std::string name = getUsername();
+    setupKey = generate_DH_key();
     const std::vector<uint8_t> address = AuthConfig::instance().getAddress();
     std::cout << "Addr Size: " << address.size() << std::endl;
     uint8_t setupBytes[1] = {0x01};
@@ -32,13 +35,13 @@ std::vector<uint8_t> getSetupMessage() {
     std::string hostname = getHostname();
     ss << hostname << ":";
     std::cout << ss.str().size() << std::endl;
-    auto key = AuthConfig::instance().getSecretKey(name.c_str());
-    if (key.size() == 0){
-        std::cout << "credentials for user " << getUsername() << " generated successfully" << std::endl;
-        generateSecretCode();
-        key = AuthConfig::instance().getSecretKey(name.c_str());
-    }
-    ss << stringFromVector(key);
+    // auto key = AuthConfig::instance().getSecretKey(name.c_str());
+    // if (key.size() == 0){
+    //     std::cout << "credentials for user " << getUsername() << " generated successfully" << std::endl;
+    //     generateSecretCode();
+    //     key = AuthConfig::instance().getSecretKey(name.c_str());
+    // }
+    ss.write(reinterpret_cast<const char*>(setupKey->public_key), DH_KEY_SIZE);
     printHex(ss.str());
     return vectorFromString(ss.str());
 }
@@ -57,12 +60,15 @@ int runSetup(Communication* c) {
         std::vector<uint8_t> v;
         int ret = c->get_data(const_cast<std::vector<uint8_t>&>(v));
         printHex(stringFromVector(v));
-        if (ret == 5) {
+        if (ret == 5 + DH_KEY_SIZE) {
             success = true;
             std::vector<uint8_t> a(2);
             a[0] = v[2]; a[1] = v[3];
             AuthConfig::instance().setAddress(getUsername(), a);
             std::cout << "Setup data was transferred into phone successfully" << std::endl;
+            std::vector<uint8_t> secret = generate_shared_secret(setupKey, reinterpret_cast<uint8_t*>(v.data()) + 5);
+
+            AuthConfig::instance().setSecretKey(getUsername(), secret);
         }
 
     };
