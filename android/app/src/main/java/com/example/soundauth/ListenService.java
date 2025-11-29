@@ -73,12 +73,15 @@ public class ListenService extends Service {
         Log.d(TAG, "processMessage: " + new String(msg.data));
         var intent = new Intent();
         var addr = getAddress();
+        Auth auth = new Auth(sender);
         switch (msg.command) {
             case 0x01:
+                var secret = auth.handlePairRequest(msg);
                 intent.setAction("device_add");
                 intent.putExtra("device", msg.data);
                 intent.putExtra("id", msg.source);
-                sender.enqueueMessage(new byte[]{}, (byte)0x01, msg.source);
+                intent.putExtra("secret", secret);
+                sender.enqueueMessage(auth.getPublicKey(), (byte)0x01, msg.source);
                 break;
             case 0x02:
                 if (msg.address[0] != addr[0] || msg.address[1] != addr[1])
@@ -89,13 +92,13 @@ public class ListenService extends Service {
                         dev = d;
                     }
                 }
+                auth.setDevice(dev);
                 Log.d(TAG, "Received login challenge");
                 if (dev == null) {
                     intent.setAction("error");
                     intent.putExtra("message", "Received login from unknown device");
                     break;
                 }
-                Auth auth = new Auth(dev);
                 Log.d(TAG, "Chall: " + bytesToHex(msg.data));
                 var res = auth.respond(msg.data);
                 sender.enqueueMessage(res, (byte)0x02, dev.id);

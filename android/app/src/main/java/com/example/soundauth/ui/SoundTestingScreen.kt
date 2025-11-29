@@ -1,0 +1,226 @@
+package com.example.soundauth.ui
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.AudioTrack
+import android.media.MediaRecorder
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private const val TAG = "SoundTestingScreen"
+
+class SoundTestingScreen() {
+    val sampleRate = 48000
+    val channelConfigIn = AudioFormat.CHANNEL_IN_MONO
+    val channelConfigOut = AudioFormat.CHANNEL_OUT_MONO
+    val bufferSize = 2048 * 4 //AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+    val audioFormat: AudioFormat = AudioFormat.Builder()
+        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+        .setSampleRate(sampleRate)
+        .setChannelMask(channelConfigIn)
+        .build()
+
+    val audioFormatOut: AudioFormat = AudioFormat.Builder()
+        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+        .setSampleRate(sampleRate)
+        .setChannelMask(channelConfigOut)
+        .build()
+
+    val audioAttributes: AudioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_UNKNOWN)
+        .build()
+    
+    @Composable
+    fun UI() {
+
+        val context = LocalContext.current
+        val coroutineScope = rememberCoroutineScope()
+
+        var hasRecordAudioPermission by remember {
+            mutableStateOf(
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+            )
+        }
+
+        val permissionLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { isGranted: Boolean ->
+            hasRecordAudioPermission = isGranted
+        }
+
+        var isRecording by remember { mutableStateOf(false) }
+        var isPlaying by remember { mutableStateOf(false) }
+        var audioData by remember { mutableStateOf<FloatArray?>(null) }
+        var audioRecord by remember { mutableStateOf<AudioRecord?>(null) }
+        var audioTrack by remember { mutableStateOf<AudioTrack?>(null) }
+        var recordingJob by remember { mutableStateOf<Job?>(null) }
+        var playbackJob by remember { mutableStateOf<Job?>(null) }
+        var frequencies by remember { mutableStateOf<List<Float>>(listOf()) }
+
+        fun startRecording() {
+            if (!hasRecordAudioPermission) {
+                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                return
+            }
+
+            isRecording = true
+            audioData = null // Clear previous recording
+
+            recordingJob = coroutineScope.launch(Dispatchers.IO) {
+                val record = AudioRecord.Builder()
+                    .setAudioSource(MediaRecorder.AudioSource.MIC)
+                    .setAudioFormat(audioFormat)
+                    .setBufferSizeInBytes(bufferSize)
+                    .build()
+
+                withContext(Dispatchers.Main) { audioRecord = record }
+
+                val buffer = FloatArray(bufferSize / 4)
+                val recordedData = mutableListOf<Float>()
+                record.startRecording()
+
+                while (isRecording) {
+                    val readSize = record.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
+                    if (readSize > 0) {
+                        RunFFT(buffer);
+                    }
+                }
+
+                record.stop()
+                record.release()
+
+                withContext(Dispatchers.Main) {
+                    audioData = recordedData.toFloatArray()
+                    audioRecord = null
+                }
+            }
+        }
+
+        fun stopRecording() {
+            isRecording = false
+        }
+
+        fun startPlaying() {
+            isPlaying = true
+            playbackJob = coroutineScope.launch(Dispatchers.IO) {
+                val track = AudioTrack.Builder()
+                    .setAudioAttributes(audioAttributes)
+                    .setAudioFormat(audioFormatOut)
+                    .setBufferSizeInBytes(bufferSize)
+                    .build()
+                withContext(Dispatchers.Main) { audioTrack = track }
+
+                track.play()
+
+                var offset = 0
+                var data = GenerateFrequencies(frequencies.toFloatArray())
+                Log.d(TAG, "startPlaying: $frequencies")
+                while (isPlaying) {
+                    val writeSize = minOf(data.size - offset, bufferSize / 4)
+                    track.write(data, offset, writeSize, AudioTrack.WRITE_BLOCKING)
+                    offset += writeSize
+                    if (offset >= data.size) {
+
+                        offset = 0
+                        data = GenerateFrequencies(frequencies.toFloatArray())
+                    }
+                }
+
+
+                if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                    track.stop()
+                }
+                track.release()
+
+                withContext(Dispatchers.Main) {
+                    isPlaying = false
+                    audioTrack = null
+                }
+            }
+        }
+
+        fun stopPlaying() {
+            isPlaying = false // This will cause the playback loop to terminate
+        }
+
+
+        DisposableEffect(Unit) {
+            onDispose {
+                isRecording = false
+                isPlaying = false
+                audioRecord?.release()
+                audioTrack?.release()
+                recordingJob?.cancel()
+                playbackJob?.cancel()
+            }
+        }
+
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            FrequencyGenerator({
+                frequencies = it
+            }).UI()
+
+            Row {
+                Button(onClick = {
+                    if (isRecording) {
+                        stopRecording()
+                    } else {
+                        startRecording()
+                    }
+                }) {
+                    Text(if (isRecording) "Stop Recording" else "Start Recording")
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Button(onClick = {
+                    if (isPlaying) {
+                        stopPlaying()
+                    } else {
+                        startPlaying()
+                    }
+                }, enabled = frequencies.isNotEmpty()) {
+                    Text(if (isPlaying) "Stop Playback" else "Start Playback")
+                }
+            }
+        }
+    }
+
+    external fun RunFFT(input: FloatArray): FloatArray
+
+    external fun GenerateFrequencies(input: FloatArray): FloatArray
+}

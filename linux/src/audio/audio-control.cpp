@@ -281,7 +281,7 @@ void AudioControl::loop(int timeout) {
     while (is_running) {
         long long elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
         if (elapsed > timeout && timeout > 0) {
-            std::cerr << "Timeout reached" << std::endl;
+            std::cerr << "Timeout reached: elapsed:" << elapsed << ", timeout: " << timeout << std::endl;
             break;
         }
         if (!loop_step()) {

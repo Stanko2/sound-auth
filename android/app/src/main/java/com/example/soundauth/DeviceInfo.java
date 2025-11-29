@@ -14,7 +14,8 @@ import java.util.Stack;
 
 public class DeviceInfo {
     public final byte[] id;
-    public final byte[] secret;
+    public byte[] publicKey;
+    public byte[] secret;
     public final String name;
 
     public DeviceInfo(JSONObject json) throws JSONException {
@@ -29,8 +30,8 @@ public class DeviceInfo {
         var s = new String(data);
         this.name = s.split(":")[0];
         var idx = s.indexOf(':') + 1;
-        secret = new byte[Auth.KEY_LENGTH];
-        System.arraycopy(data, idx, secret, 0, Auth.KEY_LENGTH);
+        publicKey = new byte[Auth.KEY_LENGTH];
+        System.arraycopy(data, idx, publicKey, 0, Auth.KEY_LENGTH);
         Log.d("", "New device:" + this);
     }
 
@@ -39,7 +40,12 @@ public class DeviceInfo {
         try {
             json.put("id", ListenService.bytesToHex(id));
             json.put("name", name);
-            json.put("secret", ListenService.bytesToHex(secret));
+            if(secret != null){
+                json.put("secret", ListenService.bytesToHex(secret));
+            }
+            if (publicKey != null) {
+                json.put("publicKey", ListenService.bytesToHex(publicKey));
+            }
         } catch (JSONException ignored) {
 
         }
@@ -48,11 +54,17 @@ public class DeviceInfo {
 
     @Override
     public String toString() {
-        return "DeviceInfo{" +
-                "id=" + ListenService.bytesToHex(id) +
-                ", secret=" + ListenService.bytesToHex(secret) +
-                ", name='" + name + '\'' +
-                '}';
+        var r = "DeviceInfo{" +
+            "id=" + ListenService.bytesToHex(id) +
+            ", name='" + name + '\'';
+        if (secret != null) {
+            r+=", secret=" + ListenService.bytesToHex(secret);
+        }
+        if (publicKey != null) {
+            r+=", publicKey=" + ListenService.bytesToHex(publicKey);
+        }
+        r+='}';
+        return r;
     }
 
     @Override

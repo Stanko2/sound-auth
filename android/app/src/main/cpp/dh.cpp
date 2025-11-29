@@ -1,5 +1,7 @@
 // Diffie-Hellman key exchange implementation
 //
+#ifndef DH
+#define DH
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -79,3 +81,5 @@ std::vector<uint8_t> generate_shared_secret(const DHKey* my_key, uint8_t* other_
 
     return shared_secret;
 }
+
+#endif

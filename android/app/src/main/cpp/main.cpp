@@ -6,6 +6,7 @@
 #include "ggwave/ggwave.h"
 #include <string>
 #include <android/log.h>
+#include "dh.cpp"
 #define PROTOCOL GGWAVE_PROTOCOL_ULTRASOUND_FASTEST
 
 
@@ -79,3 +80,45 @@ Java_com_example_soundauth_ListenService_initGGwave(JNIEnv *env, jobject thiz, j
     __android_log_print(ANDROID_LOG_DEBUG, "GGWAVE", "Successfully initialized");
     return true;
 }
+
+DHKey* myKey;
+
+extern "C"
+JNIEXPORT jbyteArray JNICALL
+Java_com_example_soundauth_Auth_generateKey (JNIEnv *env, jobject thiz) {
+    myKey = generate_DH_key();
+
+    if (myKey == nullptr) {
+        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Error while generating key");
+    }
+
+    jbyteArray ret = env->NewByteArray(DH_KEY_SIZE);
+    env->SetByteArrayRegion(ret, 0, DH_KEY_SIZE, (jbyte*)myKey->public_key);
+    __android_log_print(ANDROID_LOG_DEBUG, "GGWAVE", "Successfully generated key: %s", myKey->public_key);
+
+
+    return ret;
+}
+
+extern "C"
+JNIEXPORT jbyteArray JNICALL
+Java_com_example_soundauth_Auth_getSecret (JNIEnv *env, jobject thiz, jbyteArray other_pub_key) {
+    if (myKey == nullptr) {
+        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "My key not yet generated");
+    }
+
+    if (env->GetArrayLength(other_pub_key) != DH_KEY_SIZE) {
+        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "invalid other_pub_key");
+    }
+
+    jbyte* other_pub_key_bytes = env->GetByteArrayElements(other_pub_key, nullptr);
+
+    auto secret = generate_shared_secret(myKey, reinterpret_cast<uint8_t *>(other_pub_key_bytes));
+
+    jbyteArray ret = env->NewByteArray(DH_KEY_SIZE);
+    env->SetByteArrayRegion(ret, 0, DH_KEY_SIZE, (jbyte*)secret.data());
+
+    return ret;
+}
+
+

@@ -9,14 +9,35 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Set;
 
 public class Auth {
-    public static final int KEY_LENGTH = 16;
+    private static final String TAG = "Auth";
+    public static final int KEY_LENGTH = 32;
     private DeviceInfo dev;
+    private byte[] publicKey;
 
-    public Auth(DeviceInfo device) {
-        dev = device;
+    public byte[] getPublicKey() {
+        return publicKey;
+    }
+
+    private MessageSender sender;
+
+    public void setDevice(DeviceInfo dev) {
+        this.dev = dev;
+    }
+
+    public Auth(MessageSender sender) {
+        this.sender = sender;
     }
 
     private byte[] getSecretKey() {
+        return dev.secret;
+    }
+
+    public byte[] handlePairRequest(MessageHandler.Message msg) {
+        publicKey = generateKey();
+        Log.d(TAG, "Key: " + ListenService.bytesToHex(publicKey));
+        dev = new DeviceInfo(msg.data, msg.address);
+        dev.secret = getSecret(dev.publicKey);
+        Log.d(TAG, "handlePairRequest: got secret: " + ListenService.bytesToHex(dev.secret));
         return dev.secret;
     }
 
@@ -34,4 +55,8 @@ public class Auth {
             return null;
         }
     }
+
+    private native byte[] generateKey();
+
+    private native byte[] getSecret(byte[] otherPubKey);
 }
