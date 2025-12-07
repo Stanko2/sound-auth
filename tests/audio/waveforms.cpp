@@ -8,6 +8,17 @@
 
 #define PI 3.14159265358979323846
 
+struct Peak {
+    float frequency;
+    float amplitude;
+    float phase;
+};
+
+std::ostream& operator<<(std::ostream& os, const Peak& p) {
+    os << "Peak{freq: " << p.frequency << ", amp: " << p.amplitude << ", phase: " << p.phase << "}";
+    return os;
+}
+
 std::vector<float> createWaveform(const std::vector<float>& frequencies, int sample_rate, float duration) {
     int N = static_cast<int>(duration * (float)sample_rate);
     std::vector<float> waveform(N,0);
@@ -36,17 +47,21 @@ void normalize(std::vector<float>& waveform) {
     }
 }
 
-std::vector<float> getFrequencies(const std::vector<float>& waveform, int sample_rate) {
+std::vector<Peak> getFrequencies(const std::vector<float>& waveform, int sample_rate) {
     fftw_complex *in, *out;
     fftw_plan p;
     size_t N = waveform.size();
 
     in = fftw_alloc_complex(N);
+    float max_sample = 0;
     for (size_t i = 0; i < N; i++) {
         float w = 0.5 * (1 - cos(2 * M_PI * i / (N - 1)));
         in[i][0] = w * waveform[i];
+        max_sample = std::max(max_sample, (float)in[i][0]);
         in[i][1] = 0;
     }
+
+    // std::cout << "Max sample: " << max_sample << std::endl;
 
     out = fftw_alloc_complex(N);
 
@@ -62,14 +77,12 @@ std::vector<float> getFrequencies(const std::vector<float>& waveform, int sample
     }
 
     fftw_destroy_plan(p);
-    fftw_free(in);
-    fftw_free(out);
 
     double max_freq = 0;
     int max_bin = 0;
     double max_mag = 0;
 
-    std::vector<float> peaks;
+    std::vector<Peak> peaks;
     peaks.clear();
     for (size_t i = 0; i < magnitudes.size(); ++i) {
         double freq = (double)i * sample_rate / N;
@@ -81,18 +94,25 @@ std::vector<float> getFrequencies(const std::vector<float>& waveform, int sample
         // }
         if (magnitudes[i] < 5 || freq > 20000) continue;
         if (magnitudes[i] > magnitudes[i-1] && magnitudes[i] > magnitudes[i+1]) {
-            peaks.push_back(freq);
+            Peak p = Peak();
+            p.amplitude = magnitudes[i];
+            p.frequency = freq;
+            p.phase = std::atan2(out[i][1], out[i][0]);
+            peaks.push_back(p);
         }
     }
 
+    fftw_free(in);
+    fftw_free(out);
     // std::cout << "freq: " << max_freq << " mag: " << max_mag;
-
-    std::cout << "frame: ";
-    for (size_t i = 0; i < peaks.size(); i++) {
-        std::cout << peaks[i] << " ";
+    if (peaks.size() > 0) {
+        std::cout << "frame: ";
+        for (size_t i = 0; i < peaks.size(); i++) {
+            std::cout << peaks[i] << " ";
+        }
+        std::cout << std::endl;
     }
 
-    std::cout << std::endl;
 
     return peaks;
 }

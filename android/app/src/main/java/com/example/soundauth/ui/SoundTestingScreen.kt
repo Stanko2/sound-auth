@@ -58,11 +58,14 @@ class SoundTestingScreen() {
         .setUsage(AudioAttributes.USAGE_MEDIA)
         .setContentType(AudioAttributes.CONTENT_TYPE_UNKNOWN)
         .build()
+
+    val logger = Logger()
     
     @Composable
     fun UI() {
 
         val context = LocalContext.current
+
         val coroutineScope = rememberCoroutineScope()
 
         var hasRecordAudioPermission by remember {
@@ -96,11 +99,10 @@ class SoundTestingScreen() {
             }
 
             isRecording = true
-            audioData = null // Clear previous recording
 
             recordingJob = coroutineScope.launch(Dispatchers.IO) {
                 val record = AudioRecord.Builder()
-                    .setAudioSource(MediaRecorder.AudioSource.MIC)
+                    .setAudioSource(MediaRecorder.AudioSource.UNPROCESSED)
                     .setAudioFormat(audioFormat)
                     .setBufferSizeInBytes(bufferSize)
                     .build()
@@ -114,7 +116,10 @@ class SoundTestingScreen() {
                 while (isRecording) {
                     val readSize = record.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
                     if (readSize > 0) {
-                        RunFFT(buffer);
+                        val freq = RunFFT(buffer)
+                        if (freq.isNotEmpty()) {
+                            logger.log("frame: ${freq.contentToString()}")
+                        }
                     }
                 }
 
@@ -217,6 +222,8 @@ class SoundTestingScreen() {
                     Text(if (isPlaying) "Stop Playback" else "Start Playback")
                 }
             }
+
+            logger.UI()
         }
     }
 

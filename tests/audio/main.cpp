@@ -83,6 +83,7 @@ void playTones(std::vector<float> frequencies) {
     SDL_PauseAudioDevice(playbackDevice, 0);
 
     std::vector<float> waveForm = createWaveform(frequencies, sampleRate, 5.0);
+    normalize(waveForm);
     SDL_QueueAudio(playbackDevice, waveForm.data(), waveForm.size());
     SDL_Delay(5000);
 }
