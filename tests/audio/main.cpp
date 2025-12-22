@@ -79,13 +79,26 @@ void analyzeFrequencies(int fftSamples) {
     }
 }
 
-void playTones(std::vector<float> frequencies) {
+void playTones(std::string frequencyData) {
     SDL_PauseAudioDevice(playbackDevice, 0);
+    bool running = true;
+    while(running) {
+        std::vector<float> waveForm = getWaveform(frequencyData, 8192, (int)sampleRate);
+        normalize(waveForm);
+        SDL_QueueAudio(playbackDevice, waveForm.data(), waveForm.size() * sizeof(float));
+        std::cout << "Enqueued " << SDL_GetQueuedAudioSize(playbackDevice) << " samples\n";
 
-    std::vector<float> waveForm = createWaveform(frequencies, sampleRate, 5.0);
-    normalize(waveForm);
-    SDL_QueueAudio(playbackDevice, waveForm.data(), waveForm.size());
-    SDL_Delay(5000);
+
+        while(SDL_GetQueuedAudioSize(playbackDevice) > 0) {
+            SDL_Delay(1);
+            SDL_Event e;
+            while(SDL_PollEvent(&e)) {
+                if(e.type == SDL_QUIT) running = false;
+            }
+        }
+
+    }
+
 }
 
 int main(int argc, const char* argv[]) {
@@ -103,12 +116,7 @@ int main(int argc, const char* argv[]) {
         analyzeFrequencies(atoi(argv[2]));
     }
     else if (cmd == "play") {
-        std::vector<float> frequencies;
-        for (int i = 2; i < argc; i++) {
-            frequencies.push_back(atof(argv[i]));
-        }
-
-        playTones(frequencies);
+        playTones(argv[2]);
     }
 
 

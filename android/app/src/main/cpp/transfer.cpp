@@ -2,11 +2,15 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cassert>
 #include <iostream>
 #include <vector>
 #include <fftw3.h>
 #include <jni.h>
+#include <string>
 #include <android/log.h>
+#include <sstream>
+
 
 #define PI 3.14159265358979323846
 
@@ -16,15 +20,36 @@ struct Peak {
     float phase;
 };
 
-std::vector<float> createWaveform(const std::vector<float>& frequencies, int sample_rate, float duration) {
+std::ostream& operator<<(std::ostream& os, const std::vector<float>& p) {
+    for (auto &f : p) {
+        os << f << ' ';
+    }
+    os << std::endl;
+    return os;
+}
+
+/*
+ * Creates a waveform that can be written directly to speaker
+ * Frequencies - which frequencies should be mixed
+ * Amplitudes - amplitude of each frequency
+ */
+std::vector<float> createWaveform(const std::vector<float>& frequencies, const std::vector<float>& amplitudes, const std::vector<float>& phases, int sample_rate, float duration) {
     int N = static_cast<int>(duration * (float)sample_rate);
     std::vector<float> waveform(N,0);
+    assert(frequencies.size() == amplitudes.size());
+    assert(amplitudes.size() == phases.size());
+
+    std::cout << frequencies << amplitudes << phases;
+
 
     for (int i = 0; i < N; i++) {
         double t = (double)i / (double)sample_rate;
         double acc = 0;
-        for (float f : frequencies) {
-            acc += sin(2 * PI * (double)f * t);
+        for (int j = 0; j < frequencies.size(); j++) {
+            float f = frequencies[j];
+            float a = amplitudes[j];
+            float p = phases[j];
+            acc += a * sin(2 * PI * (double)f * t + p);
         }
         waveform[i] = static_cast<float>(acc);
     }
@@ -42,6 +67,65 @@ void normalize(std::vector<float>& waveform) {
     for(float& s : waveform) {
         s /= max_val;
     }
+}
+
+std::vector<std::string> split(const std::string& s, const char delimiter) {
+    std::vector<std::string> tokens;
+    std::stringstream ss(s);
+    std::string token;
+    while(std::getline(ss,token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
+/*
+ * Frequencies representation:
+ * - Frame divider: "|"
+ * - Frequency divider: ","
+ * - Amplitude & phase: ":"
+ *
+ * Play frequencies 16300 with 16000 and then 17000Hz:
+ * "16300,16000|17000"
+ */
+
+/*
+ * Parses a data string and creates a waveform for it
+ */
+std::vector<float> getWaveform(const std::string& data, const int samples_per_frame, const int sample_rate) {
+    std::vector<float> out;
+    float frame_duration = static_cast<float>(samples_per_frame) / static_cast<float>(sample_rate);
+    std::vector<float> frequencies;
+    std::vector<float> amplitudes;
+    std::vector<float> phases;
+
+    for (auto &i : split(data, '|')) {
+        frequencies.clear();
+        amplitudes.clear();
+        phases.clear();
+        std::cout << i << std::endl;
+        for (auto &j : split(i, ',')) {
+            std::vector<std::string> nums = split(j, ':');
+            frequencies.push_back(atof(nums[0].c_str()));
+            if (nums.size() > 1) {
+                amplitudes.push_back(atof(nums[1].c_str()));
+            } else {
+                amplitudes.push_back(1);
+            }
+            if (nums.size() > 2) {
+                phases.push_back(atof(nums[2].c_str()));
+            } else {
+                phases.push_back(0);
+            }
+        }
+        std::vector<float> frame_waveform = createWaveform(frequencies, amplitudes, phases, sample_rate, frame_duration);
+        for (auto &f: frame_waveform) {
+            out.push_back(f);
+        }
+        std::cout << "waveform size: " << out.size() << " " << frame_waveform[5] << std::endl;
+    }
+
+    return out;
 }
 
 std::vector<Peak> getFrequencies(const std::vector<float>& waveform, int sample_rate) {
@@ -110,6 +194,25 @@ std::vector<Peak> getFrequencies(const std::vector<float>& waveform, int sample_
     return peaks;
 }
 
+std::string jstring2string(JNIEnv *env, jstring jStr) {
+    if (!jStr)
+        return "";
+
+    const jclass stringClass = env->GetObjectClass(jStr);
+    const jmethodID getBytes = env->GetMethodID(stringClass, "getBytes", "(Ljava/lang/String;)[B");
+    const jbyteArray stringJbytes = (jbyteArray) env->CallObjectMethod(jStr, getBytes, env->NewStringUTF("UTF-8"));
+
+    size_t length = (size_t) env->GetArrayLength(stringJbytes);
+    jbyte* pBytes = env->GetByteArrayElements(stringJbytes, NULL);
+
+    std::string ret = std::string((char *)pBytes, length);
+    env->ReleaseByteArrayElements(stringJbytes, pBytes, JNI_ABORT);
+
+    env->DeleteLocalRef(stringJbytes);
+    env->DeleteLocalRef(stringClass);
+    return ret;
+}
+
 
 extern "C"
 JNIEXPORT jfloatArray JNICALL
@@ -136,12 +239,10 @@ Java_com_example_soundauth_ui_SoundTestingScreen_RunFFT(JNIEnv *env, jobject thi
 extern "C"
 JNIEXPORT jfloatArray JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_GenerateFrequencies(JNIEnv *env, jobject thiz,
-                                                                     jfloatArray input) {
-    size_t len = env->GetArrayLength(input);
-    float* fInput = env->GetFloatArrayElements(input, nullptr);
-    std::vector<float> frequencies {fInput, fInput + len};
-
-    std::vector<float> output = createWaveform(frequencies, 48000, 5.0);
+                                                                     jstring input) {
+    std::string s = jstring2string(env, input);
+    __android_log_print(ANDROID_LOG_DEBUG, "SOUND", "input: %s", s.c_str());
+    std::vector<float> output = getWaveform(s, 8192, 48000);
 
     normalize(output);
 

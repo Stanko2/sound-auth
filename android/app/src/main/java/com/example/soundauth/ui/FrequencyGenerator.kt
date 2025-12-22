@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 
 private const val TAG = "FrequencyGenerator";
 
-class FrequencyGenerator(val onOutput: (freqs: List<Float>)->Unit) {
+class FrequencyGenerator(val onOutput: (freqs: String)->Unit) {
 
     @Composable
     fun UI(){
@@ -26,8 +26,7 @@ class FrequencyGenerator(val onOutput: (freqs: List<Float>)->Unit) {
                 onValueChange = { value ->
                     freqInput.value = value
                     try {
-                        val freqs = value.split(",").map { it.toFloat() }
-                        this@FrequencyGenerator.onOutput(freqs)
+                        this@FrequencyGenerator.onOutput(freqInput.value)
                     } catch (err: Exception) {
                         Log.d(TAG, "UI: $err")
                     }

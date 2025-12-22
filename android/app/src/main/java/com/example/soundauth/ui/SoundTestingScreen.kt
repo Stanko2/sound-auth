@@ -90,7 +90,7 @@ class SoundTestingScreen() {
         var audioTrack by remember { mutableStateOf<AudioTrack?>(null) }
         var recordingJob by remember { mutableStateOf<Job?>(null) }
         var playbackJob by remember { mutableStateOf<Job?>(null) }
-        var frequencies by remember { mutableStateOf<List<Float>>(listOf()) }
+        var playInput by remember { mutableStateOf<String>("") }
 
         fun startRecording() {
             if (!hasRecordAudioPermission) {
@@ -150,8 +150,8 @@ class SoundTestingScreen() {
                 track.play()
 
                 var offset = 0
-                var data = GenerateFrequencies(frequencies.toFloatArray())
-                Log.d(TAG, "startPlaying: $frequencies")
+                var data = GenerateFrequencies(playInput)
+                Log.d(TAG, "startPlaying: $playInput")
                 while (isPlaying) {
                     val writeSize = minOf(data.size - offset, bufferSize / 4)
                     track.write(data, offset, writeSize, AudioTrack.WRITE_BLOCKING)
@@ -159,7 +159,7 @@ class SoundTestingScreen() {
                     if (offset >= data.size) {
 
                         offset = 0
-                        data = GenerateFrequencies(frequencies.toFloatArray())
+                        data = GenerateFrequencies(playInput)
                     }
                 }
 
@@ -198,7 +198,7 @@ class SoundTestingScreen() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             FrequencyGenerator({
-                frequencies = it
+                playInput = it
             }).UI()
 
             Row {
@@ -218,7 +218,7 @@ class SoundTestingScreen() {
                     } else {
                         startPlaying()
                     }
-                }, enabled = frequencies.isNotEmpty()) {
+                }, enabled = playInput.isNotEmpty()) {
                     Text(if (isPlaying) "Stop Playback" else "Start Playback")
                 }
             }
@@ -229,5 +229,5 @@ class SoundTestingScreen() {
 
     external fun RunFFT(input: FloatArray): FloatArray
 
-    external fun GenerateFrequencies(input: FloatArray): FloatArray
+    external fun GenerateFrequencies(input: String): FloatArray
 }
