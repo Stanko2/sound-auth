@@ -16,7 +16,7 @@ class FrequencyGenerator(val onOutput: (freqs: String)->Unit) {
 
     @Composable
     fun UI(){
-        val freqInput = remember { mutableStateOf("") }
+        val freqInput = remember { mutableStateOf("17000|15000|0|17000") }
         val isPlaying = remember { mutableStateOf(false) }
 
         Column {

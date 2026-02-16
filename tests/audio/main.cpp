@@ -6,14 +6,17 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <ostream>
 #include <vector>
 #include "waveforms.cpp"
+#include "modulation.cpp"
 
 SDL_AudioSpec captureSpec;
 SDL_AudioSpec playbackSpec;
 SDL_AudioDeviceID captureDevice;
 SDL_AudioDeviceID playbackDevice;
 double sampleRate = 48000;
+ProtocolConfig p;
 
 void init_capture() {
     SDL_zero(captureSpec);
@@ -58,12 +61,12 @@ void init_playback() {
 }
 
 
-void analyzeFrequencies(int fftSamples) {
+void analyzeFrequencies() {
     SDL_PauseAudioDevice(captureDevice, 0);
 
     bool running = true;
     while(running) {
-        while(SDL_GetQueuedAudioSize(captureDevice) < fftSamples) {
+        while(SDL_GetQueuedAudioSize(captureDevice) < p.N) {
             SDL_Delay(10);
         }
 
@@ -72,10 +75,11 @@ void analyzeFrequencies(int fftSamples) {
             if(e.type == SDL_QUIT) running = false;
         }
 
-        std::vector<float> samples(fftSamples);
-        int bytes = SDL_DequeueAudio(captureDevice, samples.data(), fftSamples * sizeof(float));
+        std::vector<float> samples(p.N);
+        int bytes = SDL_DequeueAudio(captureDevice, samples.data(), p.N * sizeof(float));
 
-        getFrequencies(samples, (int)sampleRate);
+        // get_spectrum(samples, (int)sampleRate);
+        enqueue_frame(samples, p);
     }
 }
 
@@ -107,13 +111,21 @@ int main(int argc, const char* argv[]) {
     }
     setenv("SDL_AUDIODRIVER", "pipewire", 1);
 
+    p.N = 2048;
+    p.sample_rate = 48000;
+    p.peak_threshold = 6;
+    p.f1 = 15000 * p.N / p.sample_rate;
+    p.f2 = 17000 * p.N / p.sample_rate;
+
+    // std::cout << "f1: " << p.f1 << "f2: " << p.f2 << std::endl;
+
     SDL_Init(SDL_INIT_AUDIO);
     init_capture();
     init_playback();
 
     std::string cmd(argv[1]);
     if (cmd == "detect") {
-        analyzeFrequencies(atoi(argv[2]));
+        analyzeFrequencies();
     }
     else if (cmd == "play") {
         playTones(argv[2]);

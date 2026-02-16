@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -90,7 +91,7 @@ class SoundTestingScreen() {
         var audioTrack by remember { mutableStateOf<AudioTrack?>(null) }
         var recordingJob by remember { mutableStateOf<Job?>(null) }
         var playbackJob by remember { mutableStateOf<Job?>(null) }
-        var playInput by remember { mutableStateOf<String>("") }
+        var playInput by remember { mutableStateOf<String>("17000|15000|0|17000") }
 
         fun startRecording() {
             if (!hasRecordAudioPermission) {
@@ -151,19 +152,26 @@ class SoundTestingScreen() {
 
                 var offset = 0
                 var data = GenerateFrequencies(playInput)
+
+                if (data.size < sampleRate) {
+                    val padded = FloatArray(sampleRate)
+                    System.arraycopy(data, 0, padded, 0, data.size)
+                    data = padded
+                }
+
                 Log.d(TAG, "startPlaying: $playInput")
                 while (isPlaying) {
                     val writeSize = minOf(data.size - offset, bufferSize / 4)
                     track.write(data, offset, writeSize, AudioTrack.WRITE_BLOCKING)
                     offset += writeSize
                     if (offset >= data.size) {
-
+                        isPlaying = false
                         offset = 0
-                        data = GenerateFrequencies(playInput)
+//                        data = GenerateFrequencies(playInput)
                     }
                 }
 
-
+//                delay((data.size / sampleRate * 5000).toLong())
                 if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
                     track.stop()
                 }

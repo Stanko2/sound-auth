@@ -54,6 +54,17 @@ std::vector<float> createWaveform(const std::vector<float>& frequencies, const s
         waveform[i] = static_cast<float>(acc);
     }
 
+    // apply fadeIn / fadeOut to prevent "clicks"
+    int fadeInSamples = (int)(0.002f * (float)sample_rate);
+    for (int i = 0; i < fadeInSamples; i++) {
+        waveform[i] *= (float)i / (float)fadeInSamples;
+    }
+
+    int fadeOutSamples = 2 * fadeInSamples;
+    for (int i = 0; i < fadeOutSamples; i++) {
+        waveform[waveform.size() - 1 - i] *= (float)i / (float)fadeOutSamples;
+    }
+
     return waveform;
 }
 
@@ -94,7 +105,7 @@ std::vector<std::string> split(const std::string& s, const char delimiter) {
  */
 std::vector<float> getWaveform(const std::string& data, const int samples_per_frame, const int sample_rate) {
     std::vector<float> out;
-    float frame_duration = static_cast<float>(samples_per_frame) / static_cast<float>(sample_rate);
+    float frame_duration = static_cast<float>(samples_per_frame) / static_cast<float>(sample_rate) / 4;
     std::vector<float> frequencies;
     std::vector<float> amplitudes;
     std::vector<float> phases;
@@ -242,7 +253,7 @@ Java_com_example_soundauth_ui_SoundTestingScreen_GenerateFrequencies(JNIEnv *env
                                                                      jstring input) {
     std::string s = jstring2string(env, input);
     __android_log_print(ANDROID_LOG_DEBUG, "SOUND", "input: %s", s.c_str());
-    std::vector<float> output = getWaveform(s, 8192, 48000);
+    std::vector<float> output = getWaveform(s, 2048, 48000);
 
     normalize(output);
 

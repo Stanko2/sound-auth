@@ -26,3 +26,4 @@ CMakeCache.txt
 Makefile
 compile_commands.json
 linux/sound-auth
+tests/audio/marker_data.csv

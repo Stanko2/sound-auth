@@ -1,7 +1,8 @@
-
+#pragma once
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <complex>
 #include <cstddef>
 #include <iostream>
 #include <sstream>
@@ -10,6 +11,8 @@
 #include <fftw3.h>
 
 #define PI 3.14159265358979323846
+typedef std::vector<std::complex<float>> spectrum;
+
 
 struct Peak {
     float frequency;
@@ -54,6 +57,16 @@ std::vector<float> createWaveform(const std::vector<float>& frequencies, const s
             acc += a * sin(2 * PI * (double)f * t + p);
         }
         waveform[i] = static_cast<float>(acc);
+    }
+
+    // apply fadeIn / fadeOut to prevent "clicks"
+    int fadeSamples = (int)(0.002f * (float)sample_rate);
+    for (int i = 0; i < fadeSamples; i++) {
+        waveform[i] *= i / (float)fadeSamples;
+    }
+
+    for (int i = 0; i < fadeSamples; i++) {
+        waveform[waveform.size() - 1 - i] *= i / (float)fadeSamples;
     }
 
     return waveform;
@@ -130,15 +143,14 @@ std::vector<float> getWaveform(const std::string data, const int samples_per_fra
     return out;
 }
 
-
-
-std::vector<Peak> getFrequencies(const std::vector<float>& waveform, int sample_rate) {
+spectrum get_spectrum(const std::vector<float>& waveform, int sample_rate) {
     fftw_complex *in, *out;
     fftw_plan p;
     size_t N = waveform.size();
 
     in = fftw_alloc_complex(N);
     float max_sample = 0;
+    spectrum ret;
     for (size_t i = 0; i < N; i++) {
         float w = 0.5 * (1 - cos(2 * M_PI * i / (N - 1)));
         in[i][0] = w * waveform[i];
@@ -154,14 +166,25 @@ std::vector<Peak> getFrequencies(const std::vector<float>& waveform, int sample_
 
     fftw_execute(p);
 
-    std::vector<float> magnitudes(N/2);
-    for (size_t i = 0; i < N / 2; ++i) {
-        float real = out[i][0];
-        float imag = out[i][1];
-        magnitudes[i] = sqrt(real * real + imag * imag);
+    for (size_t i = 0; i < N; i++) {
+        ret.push_back({(float)out[i][0], (float)out[i][1]});
     }
 
     fftw_destroy_plan(p);
+    fftw_free(in);
+    fftw_free(out);
+
+    return ret;
+}
+
+std::vector<Peak> get_peaks(spectrum spectrum, int sample_rate, int N) {
+
+    std::vector<float> magnitudes(N/2);
+    for (size_t i = 0; i < N / 2; ++i) {
+        float real = spectrum[i].real();
+        float imag = spectrum[i].imag();
+        magnitudes[i] = sqrt(real * real + imag * imag);
+    }
 
     double max_freq = 0;
     int max_bin = 0;
@@ -177,18 +200,16 @@ std::vector<Peak> getFrequencies(const std::vector<float>& waveform, int sample_
         //     max_freq = freq;
         //     max_mag = magnitudes[i];
         // }
-        if (magnitudes[i] < 5 || freq > 20000) continue;
+        if (magnitudes[i] < 30 || freq > 20000) continue;
         if (magnitudes[i] > magnitudes[i-1] && magnitudes[i] > magnitudes[i+1]) {
             Peak p = Peak();
             p.amplitude = magnitudes[i];
             p.frequency = freq;
-            p.phase = std::atan2(out[i][1], out[i][0]);
+            p.phase =  std::atan2(spectrum[i].imag(), spectrum[i].real());
             peaks.push_back(p);
         }
     }
 
-    fftw_free(in);
-    fftw_free(out);
     // std::cout << "freq: " << max_freq << " mag: " << max_mag;
     if (peaks.size() > 0) {
         std::cout << "frame: ";
