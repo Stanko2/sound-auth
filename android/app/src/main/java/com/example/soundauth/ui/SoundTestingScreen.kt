@@ -39,35 +39,12 @@ import kotlinx.coroutines.withContext
 private const val TAG = "SoundTestingScreen"
 
 class SoundTestingScreen() {
-    val sampleRate = 48000
-    val channelConfigIn = AudioFormat.CHANNEL_IN_MONO
-    val channelConfigOut = AudioFormat.CHANNEL_OUT_MONO
-    val bufferSize = 2048 * 4 //AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-    val audioFormat: AudioFormat = AudioFormat.Builder()
-        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-        .setSampleRate(sampleRate)
-        .setChannelMask(channelConfigIn)
-        .build()
-
-    val audioFormatOut: AudioFormat = AudioFormat.Builder()
-        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-        .setSampleRate(sampleRate)
-        .setChannelMask(channelConfigOut)
-        .build()
-
-    val audioAttributes: AudioAttributes = AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_MEDIA)
-        .setContentType(AudioAttributes.CONTENT_TYPE_UNKNOWN)
-        .build()
-
     val logger = Logger()
     
     @Composable
     fun UI() {
 
         val context = LocalContext.current
-
-        val coroutineScope = rememberCoroutineScope()
 
         var hasRecordAudioPermission by remember {
             mutableStateOf(
@@ -85,13 +62,8 @@ class SoundTestingScreen() {
         }
 
         var isRecording by remember { mutableStateOf(false) }
-        var isPlaying by remember { mutableStateOf(false) }
-        var audioData by remember { mutableStateOf<FloatArray?>(null) }
-        var audioRecord by remember { mutableStateOf<AudioRecord?>(null) }
-        var audioTrack by remember { mutableStateOf<AudioTrack?>(null) }
-        var recordingJob by remember { mutableStateOf<Job?>(null) }
-        var playbackJob by remember { mutableStateOf<Job?>(null) }
-        var playInput by remember { mutableStateOf<String>("17000|15000|0|17000") }
+        var playInput by remember { mutableStateOf("17000|15000|0|17000") }
+        var msg by remember { mutableStateOf("") }
 
         fun startRecording() {
             if (!hasRecordAudioPermission) {
@@ -100,104 +72,16 @@ class SoundTestingScreen() {
             }
 
             isRecording = true
-
-            recordingJob = coroutineScope.launch(Dispatchers.IO) {
-                val record = AudioRecord.Builder()
-                    .setAudioSource(MediaRecorder.AudioSource.UNPROCESSED)
-                    .setAudioFormat(audioFormat)
-                    .setBufferSizeInBytes(bufferSize)
-                    .build()
-
-                withContext(Dispatchers.Main) { audioRecord = record }
-
-                val buffer = FloatArray(bufferSize / 4)
-                val recordedData = mutableListOf<Float>()
-                record.startRecording()
-
-                while (isRecording) {
-                    val readSize = record.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
-                    if (readSize > 0) {
-                        val freq = RunFFT(buffer)
-                        if (freq.isNotEmpty()) {
-                            logger.log("frame: ${freq.contentToString()}")
-                        }
-                    }
-                }
-
-                record.stop()
-                record.release()
-
-                withContext(Dispatchers.Main) {
-                    audioData = recordedData.toFloatArray()
-                    audioRecord = null
-                }
-            }
+            OpenStreams();
         }
 
         fun stopRecording() {
             isRecording = false
+            CloseStreams();
         }
 
         fun startPlaying() {
-            isPlaying = true
-            playbackJob = coroutineScope.launch(Dispatchers.IO) {
-                val track = AudioTrack.Builder()
-                    .setAudioAttributes(audioAttributes)
-                    .setAudioFormat(audioFormatOut)
-                    .setBufferSizeInBytes(bufferSize)
-                    .build()
-                withContext(Dispatchers.Main) { audioTrack = track }
-
-                track.play()
-
-                var offset = 0
-                var data = GenerateFrequencies(playInput)
-
-                if (data.size < sampleRate) {
-                    val padded = FloatArray(sampleRate)
-                    System.arraycopy(data, 0, padded, 0, data.size)
-                    data = padded
-                }
-
-                Log.d(TAG, "startPlaying: $playInput")
-                while (isPlaying) {
-                    val writeSize = minOf(data.size - offset, bufferSize / 4)
-                    track.write(data, offset, writeSize, AudioTrack.WRITE_BLOCKING)
-                    offset += writeSize
-                    if (offset >= data.size) {
-                        isPlaying = false
-                        offset = 0
-//                        data = GenerateFrequencies(playInput)
-                    }
-                }
-
-//                delay((data.size / sampleRate * 5000).toLong())
-                if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                    track.stop()
-                }
-                track.release()
-
-                withContext(Dispatchers.Main) {
-                    isPlaying = false
-                    audioTrack = null
-                }
-            }
-        }
-
-        fun stopPlaying() {
-            isPlaying = false // This will cause the playback loop to terminate
-        }
-
-
-        DisposableEffect(Unit) {
-            onDispose {
-                isRecording = false
-                isPlaying = false
-                audioRecord?.release()
-                audioTrack?.release()
-                recordingJob?.cancel()
-                playbackJob?.cancel()
-            }
+            PlayFrequencies(playInput)
         }
 
         Column(
@@ -207,6 +91,8 @@ class SoundTestingScreen() {
         ) {
             FrequencyGenerator({
                 playInput = it
+            }, {
+                msg = it
             }).UI()
 
             Row {
@@ -221,13 +107,15 @@ class SoundTestingScreen() {
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Button(onClick = {
-                    if (isPlaying) {
-                        stopPlaying()
-                    } else {
-                        startPlaying()
-                    }
+                    startPlaying()
                 }, enabled = playInput.isNotEmpty()) {
-                    Text(if (isPlaying) "Stop Playback" else "Start Playback")
+                    Text("Play")
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Button(onClick = {
+                    sendData(msg.encodeToByteArray())
+                }, enabled = msg.isNotEmpty()) {
+                    Text("Send Data")
                 }
             }
 
@@ -235,7 +123,11 @@ class SoundTestingScreen() {
         }
     }
 
-    external fun RunFFT(input: FloatArray): FloatArray
+    external fun OpenStreams()
 
-    external fun GenerateFrequencies(input: String): FloatArray
+    external fun PlayFrequencies(data: String)
+
+    external fun sendData(data: ByteArray)
+
+    external fun CloseStreams()
 }

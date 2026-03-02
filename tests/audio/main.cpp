@@ -3,13 +3,12 @@
 #include <SDL2/SDL_events.h>
 #include <SDL2/SDL_stdinc.h>
 #include <SDL2/SDL_timer.h>
-#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <ostream>
 #include <vector>
-#include "waveforms.cpp"
-#include "modulation.cpp"
+#include "lib/waveforms.h"
+#include "lib/modulation.h"
 
 SDL_AudioSpec captureSpec;
 SDL_AudioSpec playbackSpec;
@@ -65,6 +64,7 @@ void analyzeFrequencies() {
     SDL_PauseAudioDevice(captureDevice, 0);
 
     bool running = true;
+    SignalModulation* s = new SignalModulation(p);
     while(running) {
         while(SDL_GetQueuedAudioSize(captureDevice) < p.N) {
             SDL_Delay(10);
@@ -79,30 +79,49 @@ void analyzeFrequencies() {
         int bytes = SDL_DequeueAudio(captureDevice, samples.data(), p.N * sizeof(float));
 
         // get_spectrum(samples, (int)sampleRate);
-        enqueue_frame(samples, p);
+        s->enqueue_frame(samples);
     }
 }
 
 void playTones(std::string frequencyData) {
     SDL_PauseAudioDevice(playbackDevice, 0);
     bool running = true;
-    while(running) {
-        std::vector<float> waveForm = getWaveform(frequencyData, 8192, (int)sampleRate);
-        normalize(waveForm);
-        SDL_QueueAudio(playbackDevice, waveForm.data(), waveForm.size() * sizeof(float));
-        std::cout << "Enqueued " << SDL_GetQueuedAudioSize(playbackDevice) << " samples\n";
+
+    Waveforms* w = new Waveforms(0,0);
+
+    std::vector<float> waveForm = w->getWaveform(frequencyData, 2048, (int)sampleRate);
+    // normalize(waveForm);
+    SDL_QueueAudio(playbackDevice, waveForm.data(), waveForm.size() * sizeof(float));
+    std::cout << "Enqueued " << SDL_GetQueuedAudioSize(playbackDevice) / 4 << " samples\n";
 
 
-        while(SDL_GetQueuedAudioSize(playbackDevice) > 0) {
-            SDL_Delay(1);
-            SDL_Event e;
-            while(SDL_PollEvent(&e)) {
-                if(e.type == SDL_QUIT) running = false;
-            }
+    while(SDL_GetQueuedAudioSize(playbackDevice) > 0) {
+        SDL_Delay(1);
+        SDL_Event e;
+        while(SDL_PollEvent(&e)) {
+            if(e.type == SDL_QUIT) running = false;
         }
-
     }
+    // }
+}
 
+void sendData(std::string data) {
+    SDL_PauseAudioDevice(playbackDevice, 0);
+    bool running = true;
+
+    SignalModulation* s = new SignalModulation(p);
+
+    std::vector<uint8_t> vec(data.begin(), data.end());
+    waveform w = s->transmit_data(vec);
+    SDL_QueueAudio(playbackDevice, w.data(), w.size() * sizeof(float));
+
+    while(SDL_GetQueuedAudioSize(playbackDevice) > 0) {
+        SDL_Delay(1);
+        SDL_Event e;
+        while(SDL_PollEvent(&e)) {
+            if(e.type == SDL_QUIT) running = false;
+        }
+    }
 }
 
 int main(int argc, const char* argv[]) {
@@ -113,7 +132,7 @@ int main(int argc, const char* argv[]) {
 
     p.N = 2048;
     p.sample_rate = 48000;
-    p.peak_threshold = 6;
+    p.peak_threshold = 3;
     p.f1 = 15000 * p.N / p.sample_rate;
     p.f2 = 17000 * p.N / p.sample_rate;
 
@@ -129,6 +148,8 @@ int main(int argc, const char* argv[]) {
     }
     else if (cmd == "play") {
         playTones(argv[2]);
+    } else if (cmd == "send") {
+        sendData(argv[2]);
     }
 
 
