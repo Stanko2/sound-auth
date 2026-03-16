@@ -1,5 +1,4 @@
 #include "modulation.h"
-#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <complex>
@@ -7,23 +6,25 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <deque>
 #include <fstream>
 #include <ios>
 #include <iostream>
-#include <iterator>
-#include <sstream>
+#include <string>
 #include <vector>
-#include "RingBuffer.h"
 #include "waveforms.h"
 #include "filter.h"
 
 SignalModulation::SignalModulation(const ProtocolConfig& p) {
     this->p = p;
     recorder_state = idle;
-    waveforms = new Waveforms(7*p.N, p.N);
+    waveforms = new Waveforms(6*p.N, p.N);
     thresholds.resize(p.N, 0);
-    waveforms->addFilter((Filter*) new CombFilter(p.sample_rate, 20, 0.1f));
+    waveforms->addFilter((Filter*) new CombFilter(p.sample_rate, 20, 0));
+    marker_file.open("test-data/marker", std::ios_base::app | std::ios::out);
+    message_file.open("test-data/message", std::ios_base::app | std::ios::out);
+    if (!message_file.is_open()) {
+        std::cerr << "Failed to open message log file. Please create directory 'test-data'\n";
+    }
 }
 
 float mag(const std::complex<double> x) {
@@ -34,7 +35,7 @@ bool SignalModulation::has_peak(Spectrum* s, int i) {
     float m = s->mag(i);
     float nm = s->mag(i+1);
     float pm = s->mag(i-1);
-    return m > p.peak_threshold && m > nm && m > pm;
+    return m > p.peak_threshold; //&& m > nm && m > pm;
 }
 
 // detect begin of a message - should be 3 frames
@@ -77,7 +78,7 @@ int SignalModulation::detect_begin(){
     data.open("marker_data.csv", std::ios::out);
     data << "offset,F1,F2,noise" << std::endl;
     std::cout << "Detected start marker" << std::endl;
-    for(int offset = 0; offset < p.N; offset++) {
+    for(int offset = 0; offset < 3*p.N; offset++) {
         // assert(2*p.N + offset < receive_sample_buffer->size());
         std::vector<float> frame = waveforms->get_frame(p.N + offset);
         Spectrum* s = waveforms->get_spectrum(frame, p.sample_rate);
@@ -95,75 +96,82 @@ int SignalModulation::detect_begin(){
         delete s;
     }
 
-    std::cout << "after correction noise: " << best_offset_noise << std::endl;
+    marker_file << "after correction noise: " << best_offset_noise << std::endl;
     for(int i = 0; i < marker.size(); i++) {
         std::vector<float> frame = waveforms->get_frame(best_offset_noise + p.N * (i+1));
         Spectrum* s = waveforms->get_spectrum(frame, p.sample_rate);
-        std::cout << i << ". frame: F1:" << s->mag(p.f1) << " - " << s->phase(p.f1);
-        std::cout << " F2: " << s->mag(p.f2) << " - " << s->phase(p.f2) << std::endl;
+        marker_file << i << ". frame: F1:" << s->mag(p.f1) << " - " << s->phase(p.f1);
+        marker_file << " F2: " << s->mag(p.f2) << " - " << s->phase(p.f2) << std::endl;
     }
 
     float last_mag_f1 = 0;
     float last_mag_f2 = 0;
-    std::cout << "after correction mag: " << best_offset_mag << std::endl;
+    marker_file << "after correction mag: " << best_offset_mag << std::endl;
     for(int i = 0; i < marker.size(); i++) {
         std::vector<float> frame = waveforms->get_frame(best_offset_mag + p.N * i);
         Spectrum* s = waveforms->get_spectrum(frame, p.sample_rate);
-        std::cout << i << ". frame: F1:" << s->mag(p.f1) << " - " << s->phase(p.f1);
-        std::cout << " F2: " << s->mag(p.f2) << " - " << s->phase(p.f2) << std::endl;
+        marker_file << i << ". frame: F1:" << s->mag(p.f1) << " - " << s->phase(p.f1);
+        marker_file << " F2: " << s->mag(p.f2) << " - " << s->phase(p.f2) << std::endl;
 
         if (i == 0) {
             last_mag_f2 = s->mag(p.f2);
         }
+
+        float thresholdCoef = 0.1f;
         if (i == 1) {
-            thresholds[p.f2] = (s->mag(p.f2) + last_mag_f2) / 2;
-            last_mag_f1 = s->mag(p.f1);
+            float delta = last_mag_f2 - s->strength(p.f2);
+            thresholds[p.f2] = s->strength(p.f2) + thresholdCoef * delta;
+            last_mag_f1 = s->strength(p.f1);
         }
         if (i == 2) {
-            thresholds[p.f1] = (s->mag(p.f1) + last_mag_f1) / 2;
+            float delta = last_mag_f1 - s->strength(p.f1);
+            thresholds[p.f1] = s->strength(p.f1) + thresholdCoef * delta;
         }
     }
-
+    message_file << "Using thresholds: F1:" << thresholds[p.f1] << "dB F2:" << thresholds[p.f2] << std::endl;
+    if (thresholds[p.f1] > -20 || thresholds[p.f2] > -20) {
+        return -1;
+    }
 
     return best_offset_mag;
 }
 
 float SignalModulation::get_noise(Spectrum* s) {
-    float total_noise_db = 0;
+    float total_noise = 0;
     int count = 0;
     for(int i = 0; i < p.N / 2; i++) {
         if (abs(i - p.f1) < 10 || abs(i - p.f2) < 10) continue;
-
-        float raw_mag = s->mag(i);
-        float normalized_mag = raw_mag / p.N;
-
-        float mag_db = 20.0f * log10(std::max(normalized_mag, 1e-7f));
-
-        total_noise_db += mag_db;
+        total_noise += s->mag(i);
         count++;
     }
 
-    return (count > 0) ? (total_noise_db / count) : -140.0f;
+    return total_noise;
 }
 
 // enqueues sample to sample_buffer and removes old ones from it
 void SignalModulation::enqueue_frame(const std::vector<float>& samples) {
     assert(samples.size() == p.N);
     waveforms->enqueue_frame(samples);
-
+    // std::cout << "enqueue" << std::endl;
     if (recorder_state == idle) {
         int x = detect_begin();
         if (x != -1) {
             sync_offset = x;
             recorder_state = processing;
+            msg_frames = 0;
+            thresholds[p.f1] = -40;
+            thresholds[p.f2] = -40;
+            // std::cout << "Using threshold: F1: " << thresholds[p.f1] << " F2: " << thresholds[p.f2] << std::endl;
         }
     } else if (recorder_state == processing) {
-        if (msg_frames < 30) {
+        // std::cout << "processing" << std::endl;
+        if (msg_frames < 16) {
             demodulate();
+            msg_frames ++;
         } else {
             recorder_state = idle;
             msg_frames = 0;
-            // receive_sample_buffer->clear();
+            std::cout << std::endl;
         }
     }
 }
@@ -171,18 +179,20 @@ void SignalModulation::enqueue_frame(const std::vector<float>& samples) {
 std::vector<float> SignalModulation::modulate() {
     std::string frequencies[2] =  {"15000", "17000"};
     std::string waveformString = "17000|15000|0|17000|";
-
+    std::cout << "Modulate " << tx_buffer.size() << std::endl;
     for (int i = 0; i < tx_buffer.size(); i+= 2) {
         bool added = false;
-        for (int j = 0; i < 2; j ++) {
+        for (int j = 0; j < 2; j++) {
             if (tx_buffer[i+j]) {
                 waveformString += frequencies[j] + ",";
+                added = true;
             }
         }
         if (!added) {
             waveformString += "0|";
+        } else {
+            waveformString += "|";
         }
-        waveformString += "|";
     }
 
     std::cout << "Waveform string: " << waveformString << std::endl;
@@ -192,7 +202,7 @@ std::vector<float> SignalModulation::modulate() {
 waveform SignalModulation::transmit_data(std::vector<uint8_t> &data) {
     tx_buffer.clear();
     for (uint8_t byte: data)  {
-        for (int i = 0; i < sizeof(uint8_t); i ++) {
+        for (int i = 7; i >= 0; i --) {
             tx_buffer.push_back((byte & (1 << i)) > 0);
         }
     }
@@ -205,20 +215,80 @@ unsigned char ToByte(std::vector<bool> b)
     unsigned char c = 0;
     for (int i=0; i < 8; ++i)
         if (b[i])
-            c |= 1 << i;
+            c |= 1 << (7-i);
     return c;
 }
 
+Spectrum* SignalModulation::get_spectrum(int offset) {
+    waveform frame = waveforms->get_frame(offset);
+    return waveforms->get_spectrum(frame, p.sample_rate);
+}
+
+bool SignalModulation::is_present(int frame_offset, int f) {
+    Spectrum* s = get_spectrum(frame_offset);
+    float curr = s->strength(f);
+    // ak sme pod thresholdom, frekvencia tam nie je
+    if (curr <= thresholds[f]){
+        delete s;
+        return false;
+    }
+
+    delete s;
+    Spectrum *s_next = get_spectrum(frame_offset + p.N / 6);
+    Spectrum *s_last = get_spectrum(frame_offset - p.N / 6);
+
+    // Sme nad thresholdom - musime sa pozriet na to, ci sa meni pomaly
+    // Ak sa meni pomaly, tak mame pravdepodobne kopec -> frekvencia tam bude
+
+    float next = s_next->strength(f);
+    float last = s_last->strength(f);
+    float delta = std::abs(next - last);
+
+
+    // return last <= curr && curr >= next;
+    if (next < thresholds[f] || last < thresholds[f]) {
+        delete s_last;
+        delete s_next;
+        return false;
+    }
+
+    delete s_last;
+    delete s_next;
+    // message_file << " delta: " << delta;
+    return delta <= 7;
+}
+
+
 void SignalModulation::demodulate() {
-    waveform frame = waveforms->get_frame(sync_offset);
+    waveform frame = waveforms->get_frame(sync_offset + 3*p.N);
     Spectrum* s = waveforms->get_spectrum(frame, p.sample_rate);
-    rx_buffer.push_back(s->mag(p.f1) >= thresholds[p.f1]);
-    rx_buffer.push_back(s->mag(p.f2) >= thresholds[p.f2]);
+    message_file << "message frame #" << msg_frames;
+    message_file << " F1: " << s->strength(p.f1) << " F2: " << s->strength(p.f2) << " ";
+    bool bit1 = is_present(sync_offset + 3*p.N, p.f1);
+    bool bit2 = is_present(sync_offset + 3*p.N, p.f2);
+    message_file << " " << bit1 << bit2 << std::endl;
+    // message_file << " noise: " << get_noise(s) << std::endl;
+
+    // for (int i = 0; i <= p.N; i++) {
+    //     waveform frame = waveforms->get_frame(sync_offset + 2*p.N + i);
+    //     Spectrum* s = waveforms->get_spectrum(frame, p.sample_rate);
+    //     message_file << s->strength(p.f1) << "," << s->strength(p.f2) << "," << (i == p.N) << std::endl;
+
+    //     delete s;
+    // }
+
+    rx_buffer.push_back(bit1);
+    rx_buffer.push_back(bit2);
+    // std::cout << "Got: " << rx_buffer[rx_buffer.size() - 1] << std::endl;
+    // std::cout << "Got: " << rx_buffer[rx_buffer.size() - 2] << std::endl;
 
     if (rx_buffer.size() == 8) {
+        message_file << "Received byte: " << ToByte(rx_buffer) << std::endl;
         std::cout << ToByte(rx_buffer);
         rx_buffer.clear();
     }
+
+    delete s;
 }
 
 ProtocolConfig* createProtocolConfig(int N, int sample_rate, int f1, int f2, float peak_threshold) {
@@ -230,4 +300,10 @@ ProtocolConfig* createProtocolConfig(int N, int sample_rate, int f1, int f2, flo
     p->f2 = f2 * p->N / p->sample_rate;
 
     return p;
+}
+
+SignalModulation::~SignalModulation() {
+    delete waveforms;
+    marker_file.close();
+    message_file.close();
 }

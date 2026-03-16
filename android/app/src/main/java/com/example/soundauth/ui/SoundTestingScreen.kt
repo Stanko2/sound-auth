@@ -40,7 +40,17 @@ private const val TAG = "SoundTestingScreen"
 
 class SoundTestingScreen() {
     val logger = Logger()
-    
+
+    fun String.toBitString(): String =
+        this.toByteArray()
+            .joinToString("") { byte ->
+                byte.toInt().and(0xFF)
+                    .toString(2)
+                    .padStart(8, '0')
+            }
+            .chunked(2)
+            .joinToString(" ")
+
     @Composable
     fun UI() {
 
@@ -118,6 +128,8 @@ class SoundTestingScreen() {
                     Text("Send Data")
                 }
             }
+
+            Text(msg.toBitString())
 
             logger.UI()
         }

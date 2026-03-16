@@ -1,4 +1,5 @@
 #pragma once
+#include <fstream>
 #include <iostream>
 #include <vector>
 #include <complex>
@@ -42,6 +43,9 @@ public:
 
     // get phase of frequency f
     const float phase(const int f);
+
+    // get strength in dB
+    const float strength(const int f);
 };
 
 
@@ -53,6 +57,10 @@ private:
     void normalize(waveform& waveform);
     std::vector<Filter*> filters;
     float applyFilters(float sample);
+
+
+    std::ofstream recordFile;
+    size_t totalBytes = 0;
 
     /*
     * Creates a waveform that can be written directly to speaker
@@ -81,18 +89,12 @@ public:
     */
     std::vector<float> getWaveform(const std::string data, const int samples_per_frame, const int sample_rate);
 
-
     Spectrum* get_spectrum(const std::vector<float>& waveform, int sample_rate);
 
     /*
      * Tries to get peaks from the spectrum - old method, not used
      */
     std::vector<Peak> get_peaks(Spectrum* spectrum, int sample_rate, int N);
-
-    /*
-     * Helper function to save buffer to a wav format.
-     */
-    void saveToWav(const std::string& filename, int sample_rate);
 
     /**
      * Get a continuous frame (of length p.N) starting at `offset` within the
@@ -106,4 +108,6 @@ public:
      * Adds a new frame to the buffer
      */
     void enqueue_frame(const std::vector<float>& samples);
+
+    ~Waveforms();
 };

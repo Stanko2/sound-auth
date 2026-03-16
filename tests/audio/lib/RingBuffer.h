@@ -20,6 +20,7 @@ public:
     [[nodiscard]] size_t size() const;
     bool full();
     bool empty();
+    std::vector<T> snapshot();
 private:
     int n_elements;
     std::vector<T> memory;
@@ -95,6 +96,19 @@ bool Ringbuffer<T>::full() {
 template <class T>
 bool Ringbuffer<T>::empty() {
     return size() == 0;
+}
+
+// Add this to your Ringbuffer class
+template <class T>
+std::vector<T> Ringbuffer<T>::snapshot() {
+    const std::lock_guard<std::mutex> g(lock);
+    std::vector<T> out;
+    out.reserve(n_elements);
+    for (int i = 0; i < n_elements; i++) {
+        // Use the same logic as get() but under a single lock
+        out.push_back(memory[(start + i) % memory.size()]);
+    }
+    return out;
 }
 
 #endif //SOUND_AUTH_RINGBUFFER_H

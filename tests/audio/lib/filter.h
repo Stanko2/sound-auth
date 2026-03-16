@@ -18,6 +18,6 @@ private:
     float gain;
 
 public:
-    CombFilter(float sample_rate, float target, float g);
+    CombFilter(float sample_rate, float target, float decay);
     float process(float input) override;
 };

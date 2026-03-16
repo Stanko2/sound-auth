@@ -39,12 +39,20 @@ private:
   ProtocolConfig p;
   Waveforms *waveforms;
 
+  std::ofstream marker_file;
+  std::ofstream message_file;
+
   /**
    * Check whether spectrum `s` has a peak at bin `i` according to protocol `p`.
    */
   bool has_peak(Spectrum* s, int i);
 
+  Spectrum* get_spectrum(int offset);
 
+  /*
+   * Check if frequency f is present in the spectrum starting at frame_offset
+   */
+  bool is_present(int frame_offset, int f);
 
   /**
    * Detect the beginning (sync marker) of a message in the current

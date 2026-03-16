@@ -24,10 +24,12 @@ aaudio_data_callback_result_t OutputDataCallback(
 
     int i = 0;
     while (!output_buffer->empty() && i < length) {
-        output_buffer->get(waveform[i]);
+        output_buffer->pop(waveform[i]);
         i++;
     }
-//    std::cout << "output size:" << output_buffer->size() << " " << length << std::endl;
+//    if (!output_buffer->empty()) {
+//        std::cout << "output size:" << output_buffer->size() << " " << length << std::endl;
+//    }
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
 }
 

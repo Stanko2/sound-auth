@@ -3,12 +3,15 @@
 #include <SDL2/SDL_events.h>
 #include <SDL2/SDL_stdinc.h>
 #include <SDL2/SDL_timer.h>
+#include <cassert>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <ostream>
 #include <vector>
 #include "lib/waveforms.h"
 #include "lib/modulation.h"
+// #include "lib/wavExport.cpp"
 
 SDL_AudioSpec captureSpec;
 SDL_AudioSpec playbackSpec;
@@ -64,9 +67,11 @@ void analyzeFrequencies() {
     SDL_PauseAudioDevice(captureDevice, 0);
 
     bool running = true;
+    // std::ofstream outputFile("data.wav", std::ios::binary);
     SignalModulation* s = new SignalModulation(p);
+    // int total = 0;
     while(running) {
-        while(SDL_GetQueuedAudioSize(captureDevice) < p.N) {
+        while(SDL_GetQueuedAudioSize(captureDevice) < p.N * sizeof(float)) {
             SDL_Delay(10);
         }
 
@@ -78,9 +83,18 @@ void analyzeFrequencies() {
         std::vector<float> samples(p.N);
         int bytes = SDL_DequeueAudio(captureDevice, samples.data(), p.N * sizeof(float));
 
+        // if (bytes > 0) {
+        //     outputFile.write(reinterpret_cast<const char*>(samples.data()), bytes);
+        //     total += bytes;
+        // }
+
+
         // get_spectrum(samples, (int)sampleRate);
         s->enqueue_frame(samples);
     }
+
+    delete s;
+    // finalizeWav(outputFile, total, 1, p.sample_rate, 32);
 }
 
 void playTones(std::string frequencyData) {
@@ -122,6 +136,7 @@ void sendData(std::string data) {
             if(e.type == SDL_QUIT) running = false;
         }
     }
+
 }
 
 int main(int argc, const char* argv[]) {

@@ -12,18 +12,25 @@
 #include "RingBuffer.h"
 #include "filter.h"
 #include <fstream>
+#ifndef __ANDROID__
+#include "wavExport.cpp"
+#endif
 
 Waveforms::Waveforms(int buffer_size, int frame_size) {
     receive_sample_buffer = new Ringbuffer<float>(buffer_size);
+    filters.clear();
     this->frame_size = frame_size;
+#ifndef __ANDROID__
+    recordFile.open("data.wav", std::ios::binary);
+#endif
 }
 
 std::vector<float> Waveforms::createWaveform(const std::vector<float>& frequencies, const std::vector<float>& amplitudes, const std::vector<float> phases, int sample_rate, float duration) {
     int N = static_cast<int>(duration * (float)sample_rate);
-    std::cout << "F: " << frequencies << std::endl;
-    std::cout << "A: " << amplitudes << std::endl;
-    std::cout << "P: " << phases << std::endl;
-    std::cout << "t: " << duration << std::endl;
+    // std::cout << "F: " << frequencies << std::endl;
+    // std::cout << "A: " << amplitudes << std::endl;
+    // std::cout << "P: " << phases << std::endl;
+    // std::cout << "t: " << duration << std::endl;
     std::vector<float> waveform(N,0);
     assert(frequencies.size() == amplitudes.size());
     assert(amplitudes.size() == phases.size());
@@ -221,14 +228,28 @@ waveform Waveforms::get_frame(int offset) {
 }
 
 void Waveforms::enqueue_frame(const std::vector<float>& samples) {
+    std::vector<float> processed;
     for(float sample : samples) {
         for (Filter* f : filters) {
             sample = f->process(sample);
         }
+        processed.push_back(sample);
         receive_sample_buffer->add(sample);
     }
+    int len = samples.size() * sizeof(float);
+    totalBytes += len;
+    #ifndef __ANDROID__
+    recordFile.write(reinterpret_cast<const char*>(processed.data()), len); // <- Pokazene
+    #endif
 }
 
+
+Waveforms::~Waveforms() {
+    #ifndef __ANDROID__
+    std::cout << "Finalize wav" << std::endl;
+    finalizeWav(recordFile, totalBytes, 1, 48000, 32);
+    #endif
+}
 
 Spectrum::Spectrum(std::vector<std::complex<float>>& data) {
     this->data = data;
@@ -238,54 +259,15 @@ const float Spectrum::mag(const int f) {
     return sqrtf(data[f].real() * data[f].real() + data[f].imag() * data[f].imag());
 }
 
-const float Spectrum::phase(const int f) {
-    return std::atan2(data[f].imag(), data[f].real());
-}
-
-void Waveforms::saveToWav(const std::string& filename, int sample_rate) {
-    std::vector<float> data(receive_sample_buffer->size());
-
-    for(int i = 0; i < receive_sample_buffer->size(); i++) {
-        data[i] = receive_sample_buffer->get(i);
+const float Spectrum::strength(const int f) {
+    float s = 0;
+    for (int i = -10; i <= 10; i++) {
+        s += mag(f);
     }
 
-    std::ofstream ofs(filename, std::ios::binary);
+    return 20 * std::log10(s / (20 * data.size()));
+}
 
-    int num_samples = data.size();
-    int num_channels = 1;
-    int bytes_per_sample = 4; // 32-bit float
-    int byte_rate = sample_rate * num_channels * bytes_per_sample;
-
-    // --- RIFF Header ---
-    ofs.write("RIFF", 4);
-    int chunk_size = 36 + (num_samples * bytes_per_sample);
-    ofs.write(reinterpret_cast<char*>(&chunk_size), 4);
-    ofs.write("WAVE", 4);
-
-    // --- fmt Chunk ---
-    ofs.write("fmt ", 4);
-    int sub_chunk_1_size = 16;
-    short audio_format = 3; // 3 = IEEE Float
-    short channels = num_channels;
-    int sample_rate_val = sample_rate;
-    short block_align = num_channels * bytes_per_sample;
-    short bits_per_sample = bytes_per_sample * 8;
-
-    ofs.write(reinterpret_cast<char*>(&sub_chunk_1_size), 4);
-    ofs.write(reinterpret_cast<char*>(&audio_format), 2);
-    ofs.write(reinterpret_cast<char*>(&channels), 2);
-    ofs.write(reinterpret_cast<char*>(&sample_rate_val), 4);
-    ofs.write(reinterpret_cast<char*>(&byte_rate), 4);
-    ofs.write(reinterpret_cast<char*>(&block_align), 2);
-    ofs.write(reinterpret_cast<char*>(&bits_per_sample), 2);
-
-    // --- data Chunk ---
-    ofs.write("data", 4);
-    int sub_chunk_2_size = num_samples * bytes_per_sample;
-    ofs.write(reinterpret_cast<char*>(&sub_chunk_2_size), 4);
-
-    // Write actual float data
-    ofs.write(reinterpret_cast<const char*>(data.data()), sub_chunk_2_size);
-
-    ofs.close();
+const float Spectrum::phase(const int f) {
+    return std::atan2(data[f].imag(), data[f].real());
 }
