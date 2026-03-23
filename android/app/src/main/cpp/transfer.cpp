@@ -48,7 +48,7 @@ Java_com_example_soundauth_ui_SoundTestingScreen_PlayFrequencies(JNIEnv *env, jo
     std::string s = jstring2string(env, data);
     __android_log_print(ANDROID_LOG_DEBUG, "SOUND", "input: %s", s.c_str());
     auto* w = new Waveforms(0,0);
-    std::vector<float> output = w->getWaveform(s, 2048, 48000);
+    std::vector<float> output = w->getWaveform(s, 1024, 48000);
     delete w;
     output_buffer->resize(output.size());
 
@@ -86,7 +86,8 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_OpenStreams(JNIEnv *env, jobject thiz) {
     ProtocolConfig* p = createProtocolConfig();
-    p->peak_threshold = 0.1f;
+    p->N = 1024;
+    p->peak_threshold = 0.01f;
     OpenInputStream(*p);
     OpenOutputStream(*p);
     input_buffer = new Ringbuffer<float>(7*p->N);

@@ -17,7 +17,7 @@ public:
     T get(int index);
     bool pop(T& val);
     bool add(const T & val);
-    [[nodiscard]] size_t size() const;
+    [[nodiscard]] ssize_t size() const;
     bool full();
     bool empty();
     std::vector<T> snapshot();
@@ -84,7 +84,7 @@ bool Ringbuffer<T>::add(const T & value) {
 }
 
 template <class T>
-size_t Ringbuffer<T>::size() const{
+ssize_t Ringbuffer<T>::size() const{
     return n_elements;
 }
 

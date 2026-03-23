@@ -145,9 +145,9 @@ int main(int argc, const char* argv[]) {
     }
     setenv("SDL_AUDIODRIVER", "pipewire", 1);
 
-    p.N = 2048;
+    p.N = 1024;
     p.sample_rate = 48000;
-    p.peak_threshold = 3;
+    p.peak_threshold = 50;
     p.f1 = 15000 * p.N / p.sample_rate;
     p.f2 = 17000 * p.N / p.sample_rate;
 

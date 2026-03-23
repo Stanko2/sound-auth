@@ -1,8 +1,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <complex>
-#include <cstddef>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -11,10 +9,9 @@
 #include "waveforms.h"
 #include "RingBuffer.h"
 #include "filter.h"
-#include <fstream>
-#ifndef __ANDROID__
-#include "wavExport.cpp"
-#endif
+// #ifndef __ANDROID__
+// #include "wavExport.cpp"
+// #endif
 
 Waveforms::Waveforms(int buffer_size, int frame_size) {
     receive_sample_buffer = new Ringbuffer<float>(buffer_size);
@@ -49,7 +46,7 @@ std::vector<float> Waveforms::createWaveform(const std::vector<float>& frequenci
     }
 
     // apply fadeIn / fadeOut to prevent "clicks"
-    int fadeSamples = (int)(0.0005f * (float)sample_rate);
+    int fadeSamples = (int)(0.001f * (float)sample_rate);
     for (int i = 0; i < fadeSamples; i++) {
         waveform[i] *= i / (float)fadeSamples;
     }
@@ -139,12 +136,14 @@ Spectrum* Waveforms::get_spectrum(const waveform& waveform, int sample_rate) {
     in = fftw_alloc_complex(N);
 #endif
 
-    float max_sample = 0;
+    float max_sample = -1e8;
+    for (size_t i = 0; i < N; i++) {
+        max_sample = std::max(max_sample, (float)waveform[i]);
+    }
     std::vector<std::complex<float>> ret;
     for (size_t i = 0; i < N; i++) {
         float w = 0.5 * (1 - cos(2 * PI * i / (N - 1)));
         in[i][0] = w * waveform[i];
-        max_sample = std::max(max_sample, (float)in[i][0]);
         in[i][1] = 0;
     }
 
@@ -247,7 +246,7 @@ void Waveforms::enqueue_frame(const std::vector<float>& samples) {
 Waveforms::~Waveforms() {
     #ifndef __ANDROID__
     std::cout << "Finalize wav" << std::endl;
-    finalizeWav(recordFile, totalBytes, 1, 48000, 32);
+    // finalizeWav(recordFile, totalBytes, 1, 48000, 32);
     #endif
 }
 

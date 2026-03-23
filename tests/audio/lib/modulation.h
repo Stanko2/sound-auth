@@ -3,6 +3,7 @@
 #include <complex>
 #include <cstdint>
 #include <deque>
+#include <fstream>
 #include <vector>
 
 #include "RingBuffer.h"
@@ -41,6 +42,7 @@ private:
 
   std::ofstream marker_file;
   std::ofstream message_file;
+  std::ofstream message_data_file;
 
   /**
    * Check whether spectrum `s` has a peak at bin `i` according to protocol `p`.
@@ -95,4 +97,4 @@ public:
 
 ProtocolConfig* createProtocolConfig(int N = 2048, int sample_rate = 48000,
                                   int f1 = 15000, int f2 = 17000,
-                                  float peak_threshold = 6);
+                                  float peak_threshold = 10);
