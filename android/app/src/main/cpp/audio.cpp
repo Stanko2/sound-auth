@@ -5,6 +5,8 @@
 #include "modulation.h"
 #include "RingBuffer.h"
 
+extern "C" void AAudioStreamBuilder_setInputPreset(AAudioStreamBuilder* builder, aaudio_input_preset_t inputPreset) __attribute__((weak));
+
 AAudioStreamStruct * outputStream;
 AAudioStreamStruct * inputStream;
 Ringbuffer<float>* input_buffer;
@@ -48,11 +50,12 @@ aaudio_data_callback_result_t InputDataCallback(
 }
 
 void setStreamParams(AAudioStreamBuilder* &builder, const ProtocolConfig &p) {
-    AAudioStreamBuilder_setSampleRate(builder, p.sample_rate);
+//    AAudioStreamBuilder_setSampleRate(builder, p.sample_rate);
     AAudioStreamBuilder_setChannelCount(builder, 1);
     AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_FLOAT);
     AAudioStreamBuilder_setPerformanceMode(builder, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
-//    AAudioStreamBuilder_setUsage(builder, AAUDIO_USAGE_VOICE_COMMUNICATION_SIGNALLING);
+    AAudioStreamBuilder_setInputPreset(builder, AAUDIO_INPUT_PRESET_UNPROCESSED);
+    AAudioStreamBuilder_setSharingMode(builder, AAUDIO_SHARING_MODE_EXCLUSIVE);
 }
 
 void OpenInputStream(ProtocolConfig &p) {
@@ -85,6 +88,12 @@ void OpenOutputStream(ProtocolConfig &p) {
     }
 
     AAudioStreamBuilder_delete(builder);
+
+    int32_t actualRate = AAudioStream_getSampleRate(inputStream);
+    std::cout << "Actual sample rate: " << actualRate << std::endl;
+    aaudio_input_preset_t preset =
+            AAudioStream_getInputPreset(inputStream);
+    std::cout << "Actual preset" << preset << std::endl;
 }
 
 void StartStreams() {

@@ -63,6 +63,8 @@ private:
    */
   int detect_begin();
 
+  float bin_to_frequency(int bin);
+
   /*
    * Calculates how much noise is in spectrum
    * (used to find correct synchronization offset)

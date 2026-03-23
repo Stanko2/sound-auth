@@ -53,6 +53,7 @@ public:
 class Waveforms {
 private:
     int frame_size;
+    WindowFunction* window_function;
     Ringbuffer<float>* receive_sample_buffer;
     void normalize(waveform& waveform);
     std::vector<Filter*> filters;
@@ -69,7 +70,7 @@ private:
     */
     std::vector<float> createWaveform(const std::vector<float>& frequencies, const std::vector<float>& amplitudes, const std::vector<float> phases, int sample_rate, float duration);
 public:
-    Waveforms(int buffer_size, int frame_size);
+    Waveforms(int buffer_size, int frame_size, WindowFunction* window_function);
 
     void addFilter(Filter* filter);
 

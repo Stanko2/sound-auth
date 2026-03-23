@@ -47,7 +47,7 @@ Java_com_example_soundauth_ui_SoundTestingScreen_PlayFrequencies(JNIEnv *env, jo
     }
     std::string s = jstring2string(env, data);
     __android_log_print(ANDROID_LOG_DEBUG, "SOUND", "input: %s", s.c_str());
-    auto* w = new Waveforms(0,0);
+    auto* w = new Waveforms(0,0, new HannWindow(1024));
     std::vector<float> output = w->getWaveform(s, 1024, 48000);
     delete w;
     output_buffer->resize(output.size());

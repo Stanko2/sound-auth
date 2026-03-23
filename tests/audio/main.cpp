@@ -5,13 +5,12 @@
 #include <SDL2/SDL_timer.h>
 #include <cassert>
 #include <cstdlib>
-#include <fstream>
 #include <iostream>
 #include <ostream>
 #include <vector>
+#include "lib/filter.h"
 #include "lib/waveforms.h"
 #include "lib/modulation.h"
-// #include "lib/wavExport.cpp"
 
 SDL_AudioSpec captureSpec;
 SDL_AudioSpec playbackSpec;
@@ -101,9 +100,9 @@ void playTones(std::string frequencyData) {
     SDL_PauseAudioDevice(playbackDevice, 0);
     bool running = true;
 
-    Waveforms* w = new Waveforms(0,0);
+    Waveforms* w = new Waveforms(0,0, new HannWindow(p.N));
 
-    std::vector<float> waveForm = w->getWaveform(frequencyData, 2048, (int)sampleRate);
+    std::vector<float> waveForm = w->getWaveform(frequencyData, 1024, (int)sampleRate);
     // normalize(waveForm);
     SDL_QueueAudio(playbackDevice, waveForm.data(), waveForm.size() * sizeof(float));
     std::cout << "Enqueued " << SDL_GetQueuedAudioSize(playbackDevice) / 4 << " samples\n";
@@ -147,7 +146,7 @@ int main(int argc, const char* argv[]) {
 
     p.N = 1024;
     p.sample_rate = 48000;
-    p.peak_threshold = 50;
+    p.peak_threshold = 3;
     p.f1 = 15000 * p.N / p.sample_rate;
     p.f2 = 17000 * p.N / p.sample_rate;
 
