@@ -29,5 +29,6 @@ linux/sound-auth
 tests/audio/marker_data.csv
 tests/audio/test-data/*
 tests/audio/sound-testing
+tests/audio/data.wav
 .wav
 tests/spectrogram
