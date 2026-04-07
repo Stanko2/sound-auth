@@ -85,9 +85,9 @@ void RunRecordLoop(const ProtocolConfig *p, SignalModulation* s) {
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_OpenStreams(JNIEnv *env, jobject thiz) {
-    ProtocolConfig* p = createProtocolConfig();
-    p->N = 1024;
-    p->peak_threshold = 0.01f;
+    ProtocolConfig* p = createProtocolConfig(1024);
+    p->peak_threshold = 0.1f;
+    std::vector<int> freqs = {p->f1, p->f1 + 10, p->f2, p->f2 + 10};
     OpenInputStream(*p);
     OpenOutputStream(*p);
     input_buffer = new Ringbuffer<float>(7*p->N);
@@ -95,6 +95,7 @@ Java_com_example_soundauth_ui_SoundTestingScreen_OpenStreams(JNIEnv *env, jobjec
     StartStreams();
     record_loop_running = true;
     s = new SignalModulation(*p);
+    s->set_strategy(new TwoTonePerBitModulationStrategy(freqs));
     std::thread thread(RunRecordLoop, p, s);
     thread.detach();
 }

@@ -61,6 +61,10 @@ void init_playback() {
     }
 }
 
+int freq_to_bin(ProtocolConfig &p, int f) {
+  float delta = (float)p.N / (float)p.sample_rate;
+  return f * delta;
+}
 
 void analyzeFrequencies() {
     SDL_PauseAudioDevice(captureDevice, 0);
@@ -68,6 +72,10 @@ void analyzeFrequencies() {
     bool running = true;
     // std::ofstream outputFile("data.wav", std::ios::binary);
     SignalModulation* s = new SignalModulation(p);
+
+    std::vector<int> freqs = {p.f1, p.f1 + 10, p.f2, p.f2 + 10};
+
+    s->set_strategy(new TwoTonePerBitModulationStrategy(freqs));
     // int total = 0;
     while(running) {
         while(SDL_GetQueuedAudioSize(captureDevice) < p.N * sizeof(float)) {
@@ -147,8 +155,8 @@ int main(int argc, const char* argv[]) {
     p.N = 1024;
     p.sample_rate = 48000;
     p.peak_threshold = 3;
-    p.f1 = 15000 * p.N / p.sample_rate;
-    p.f2 = 17000 * p.N / p.sample_rate;
+    p.f1 = freq_to_bin(p, 15000);
+    p.f2 = freq_to_bin(p, 17000);
 
     // std::cout << "f1: " << p.f1 << "f2: " << p.f2 << std::endl;
 

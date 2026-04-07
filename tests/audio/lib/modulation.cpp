@@ -18,7 +18,6 @@ SignalModulation::SignalModulation(const ProtocolConfig &p) {
   this->p = p;
   recorder_state = idle;
   waveforms = new Waveforms(6 * p.N, p.N, new GaussianWindow(p.N, 4.5));
-  thresholds.resize(p.N, 0);
   waveforms->addFilter((Filter *)new CombFilter(p.sample_rate, 200, 0));
   marker_file.open("test-data/marker", std::ios_base::app | std::ios::out);
   message_file.open("test-data/message", std::ios_base::app | std::ios::out);
@@ -40,12 +39,12 @@ bool SignalModulation::has_peak(Spectrum *s, int i) {
   return m > p.peak_threshold; // && m > nm && m > pm;
 }
 
-// detect begin of a message - should be 3 frames
-//  - first must contain only f1
-//  - second must contain only f2
-//  - third must contain only f1
-// adjust offset so that the amplitude of f2 in frames 1,3 should be as small as
-// possible. Same for f1 in frame 2
+// detect begin of a message - should be 4 frames
+//  - first must contain only f2
+//  - second must contain only f1
+//  - third is empty
+//  - fourth must contain only f2
+// adjust offset so that the amplitude of f1 in frame 2 is as large as possible
 //
 // returns: offset in samples to apply for processing the message, or -1 if no
 // begin marker discovered
@@ -77,23 +76,15 @@ int SignalModulation::detect_begin() {
   float max_mag = 0;
 
   std::fstream data;
-  // waveform w(std::make_move_iterator(receive_sample_buffer.begin()),
-  // std::make_move_iterator(receive_sample_buffer.end()));
-  // waveforms->saveToWav("marker.wav", w, p.sample_rate);
   data.open("marker_data.csv", std::ios::out);
   data << "offset,F1,F2,noise" << std::endl;
   std::cout << "Detected start marker" << std::endl;
   for (int offset = 0; offset < 2 * p.N; offset++) {
-    // assert(2*p.N + offset < receive_sample_buffer->size());
     std::vector<float> frame = waveforms->get_frame(p.N + offset);
     Spectrum *s = waveforms->get_spectrum(frame, p.sample_rate);
     float noise = get_noise(s);
-    data << offset << "," << s->mag(p.f1) << "," << s->mag(p.f2) << "," <<
-    noise << std::endl;
-    // if (noise < min_noise_noise) {
-    //     min_noise_noise = noise;
-    //     best_offset_noise = offset;
-    // }
+    data << offset << "," << s->mag(p.f1) << "," << s->mag(p.f2) << "," << noise
+         << std::endl;
 
     if (s->mag(p.f1) > max_mag) {
       max_mag = s->mag(p.f1);
@@ -102,23 +93,13 @@ int SignalModulation::detect_begin() {
     delete s;
   }
 
-  // marker_file << "after correction noise: " << best_offset_noise <<
-  // std::endl; for(int i = 0; i < marker.size(); i++) {
-  //     std::vector<float> frame = waveforms->get_frame(best_offset_noise + p.N
-  //     * (i+1)); Spectrum* s = waveforms->get_spectrum(frame, p.sample_rate);
-  //     marker_file << i << ". frame: F1:" << s->mag(p.f1) << " - " <<
-  //     s->phase(p.f1); marker_file << " F2: " << s->mag(p.f2) << " - " <<
-  //     s->phase(p.f2) << std::endl;
-  // }
-
   float last_mag_f1 = 0;
   float last_mag_f2 = 0;
   std::cout << "after correction mag: " << best_offset_mag << std::endl;
   for (int i = 0; i < marker.size(); i++) {
     std::vector<float> frame = waveforms->get_frame(best_offset_mag + p.N * i);
     Spectrum *s = waveforms->get_spectrum(frame, p.sample_rate);
-    std::cout << i << ". frame: F1:" << s->mag(p.f1) << " - "
-              << s->phase(p.f1);
+    std::cout << i << ". frame: F1:" << s->mag(p.f1) << " - " << s->phase(p.f1);
     std::cout << " F2: " << s->mag(p.f2) << " - " << s->phase(p.f2)
               << std::endl;
 
@@ -129,18 +110,11 @@ int SignalModulation::detect_begin() {
     float thresholdCoef = 0.1f;
     if (i == 1) {
       float delta = last_mag_f2 - s->strength(p.f2);
-      thresholds[p.f2] = s->strength(p.f2) + thresholdCoef * delta;
       last_mag_f1 = s->strength(p.f1);
     }
     if (i == 2) {
       float delta = last_mag_f1 - s->strength(p.f1);
-      thresholds[p.f1] = s->strength(p.f1) + thresholdCoef * delta;
     }
-  }
-  message_file << "Using thresholds: F1:" << thresholds[p.f1]
-               << "dB F2:" << thresholds[p.f2] << std::endl;
-  if (thresholds[p.f1] > -20 || thresholds[p.f2] > -20) {
-    return -1;
   }
 
   return best_offset_mag;
@@ -170,18 +144,13 @@ void SignalModulation::enqueue_frame(const std::vector<float> &samples) {
       sync_offset = x;
       recorder_state = processing;
       msg_frames = 0;
-      thresholds[p.f1] = -40;
-      thresholds[p.f2] = -35;
       if (false) { // TODO: pridat switch na logovanie.
         int id = rand();
         message_data_file.open("test-data/message" + std::to_string(id));
         message_data_file << "f1,f2,reading" << std::endl;
       }
-      // std::cout << "Using threshold: F1: " << thresholds[p.f1] << " F2: " <<
-      // thresholds[p.f2] << std::endl;
     }
   } else if (recorder_state == processing) {
-    // std::cout << "processing" << std::endl;
     if (msg_frames < 64) {
       demodulate();
       msg_frames++;
@@ -195,45 +164,6 @@ void SignalModulation::enqueue_frame(const std::vector<float> &samples) {
   }
 }
 
-float SignalModulation::bin_to_frequency(int bin) {
-  float delta = (float)p.sample_rate / (float)p.N;
-  return bin * delta;
-}
-
-std::vector<float> SignalModulation::modulate() {
-  std::cout << "f1 bin: " << p.f1 << " f2 bin: " << p.f2 << std::endl;
-  std::string f1_freq = std::to_string(bin_to_frequency(p.f1));
-  std::string f2_freq = std::to_string(bin_to_frequency(p.f2));
-  std::string f1_on_freq = std::to_string(bin_to_frequency(p.f1 + 10));
-  std::string f2_on_freq = std::to_string(bin_to_frequency(p.f2 + 10));
-  std::string frequencies[4] = {f1_freq, f2_freq, f1_on_freq, f2_on_freq};
-  std::string waveformString = f2_freq + "|" + f1_freq + "|0|" + f2_freq + "|";
-  std::cout << "Modulate " << tx_buffer.size() << std::endl;
-  for (int i = 0; i < tx_buffer.size(); i += 2) {
-    bool added = false;
-    for (int j = 0; j < 2; j++) {
-      if (tx_buffer[i + j]) {
-        waveformString += frequencies[j + 2] + ",";
-        added = true;
-      } else {
-        waveformString += frequencies[j] + ",";
-        added = true;
-      }
-    }
-
-    waveformString = waveformString.substr(0, waveformString.size() - 1);
-    if (!added) {
-      waveformString += "0|";
-    } else {
-      waveformString += "|";
-    }
-  }
-
-  waveformString = waveformString.substr(0, waveformString.size() - 1);
-  std::cout << "Waveform string: " << waveformString << std::endl;
-  return waveforms->getWaveform(waveformString, p.N, p.sample_rate);
-}
-
 waveform SignalModulation::transmit_data(std::vector<uint8_t> &data) {
   tx_buffer.clear();
   for (uint8_t byte : data) {
@@ -242,7 +172,10 @@ waveform SignalModulation::transmit_data(std::vector<uint8_t> &data) {
     }
   }
 
-  return modulate();
+  assert(strategy != nullptr);
+
+  std::string freq_string = strategy->modulate(tx_buffer);
+  return waveforms->getWaveform(freq_string, p.N, p.sample_rate);
 }
 
 unsigned char ToByte(std::vector<bool> b) {
@@ -258,68 +191,11 @@ Spectrum *SignalModulation::get_spectrum(int offset) {
   return waveforms->get_spectrum(frame, p.sample_rate);
 }
 
-bool SignalModulation::is_present(int frame_offset, int f) {
-  // int start = frame_offset - 80;
-  // int end = frame_offset + 80;
-  // float local_max = -100, local_min = 0;
-  // bool decaying = true;
-
-  // float last_strength = 0;
-  // float strength_start, strength_end;
-  // for (int i = start; i <= end; i += 8) {
-  //   Spectrum *s = get_spectrum(i);
-  //   float strength = s->strength(f);
-  //   if (i == start)
-  //     strength_start = strength;
-  //   if (i == end)
-  //     strength_end = strength;
-
-  //   if (i < frame_offset && last_strength < strength)
-  //     decaying = false;
-
-  //   if (strength > local_max)
-  //     local_max = strength;
-
-  //   if (strength < local_min)
-  //     local_min = strength;
-
-  //   last_strength = strength;
-  //   delete s;
-  // }
-
-  // // ak sme pod thresholdom, frekvencia tam nie je
-  // if (local_max <= thresholds[f]) {
-  //   return false;
-  // }
-
-  // if (decaying && local_max - local_min > 2) {
-  //   return false;
-  // }
-
-  // if (strength_start - strength_end > 3)
-  //   return false;
-
-  // if (strength_level != 0 && strength_level - local_max > 10)
-  //   return false;
-
-  // strength_level = local_max;
-  // return true;
-  //
-  Spectrum* s = get_spectrum(frame_offset);
-
-  return s->strength(f + 10) >= s->strength(f);
-}
-
 void SignalModulation::demodulate() {
-  waveform frame = waveforms->get_frame(sync_offset + 3 * p.N);
-  Spectrum *s = waveforms->get_spectrum(frame, p.sample_rate);
-  message_file << "message frame #" << msg_frames;
-  message_file << " F1: " << s->strength(p.f1) << " F2: " << s->strength(p.f2)
-               << " ";
-  bool bit1 = is_present(sync_offset + 3 * p.N, p.f1);
-  bool bit2 = is_present(sync_offset + 3 * p.N, p.f2);
-  message_file << " " << bit1 << bit2 << std::endl;
-  // message_file << " noise: " << get_noise(s) << std::endl;
+  assert(strategy != nullptr);
+
+  std::vector<bool> bits = strategy->demodulate(sync_offset + 3 * p.N);
+
   if (message_data_file.is_open()) {
     for (int i = 0; i <= p.N; i++) {
       waveform frame = waveforms->get_frame(sync_offset + 2 * p.N + i);
@@ -331,18 +207,22 @@ void SignalModulation::demodulate() {
     }
   }
 
-  rx_buffer.push_back(bit1);
-  rx_buffer.push_back(bit2);
+  for (auto i : bits) {
+    rx_buffer.push_back(i);
+  }
   // std::cout << "Got: " << rx_buffer[rx_buffer.size() - 1] << std::endl;
   // std::cout << "Got: " << rx_buffer[rx_buffer.size() - 2] << std::endl;
 
   if (rx_buffer.size() == 8) {
-    message_file << "Received byte: " << ToByte(rx_buffer) << std::endl;
+    // message_file << "Received byte: " << ToByte(rx_buffer) << std::endl;
     std::cout << ToByte(rx_buffer);
     rx_buffer.clear();
   }
+}
 
-  delete s;
+void SignalModulation::set_strategy(ModulationStrategy *strategy) {
+  this->strategy = strategy;
+  strategy->Init(this, &p);
 }
 
 ProtocolConfig *createProtocolConfig(int N, int sample_rate, int f1, int f2,

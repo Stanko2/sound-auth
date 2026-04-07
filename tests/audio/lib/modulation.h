@@ -8,6 +8,7 @@
 
 #include "RingBuffer.h"
 #include "waveforms.h"
+#include "ModulationStrategies/modulationStrategy.h"
 
 struct ProtocolConfig {
     // marker frequency 1
@@ -31,10 +32,10 @@ enum State {
 
 class SignalModulation {
 private:
-  std::vector<float> thresholds;
   std::vector<bool> rx_buffer;
   std::vector<bool> tx_buffer;
   State recorder_state;
+  ModulationStrategy* strategy = nullptr;
   int sync_offset;
   int msg_frames;
   ProtocolConfig p;
@@ -49,7 +50,6 @@ private:
    */
   bool has_peak(Spectrum* s, int i);
 
-  Spectrum* get_spectrum(int offset);
 
   /*
    * Check if frequency f is present in the spectrum starting at frame_offset
@@ -63,8 +63,6 @@ private:
    */
   int detect_begin();
 
-  float bin_to_frequency(int bin);
-
   /*
    * Calculates how much noise is in spectrum
    * (used to find correct synchronization offset)
@@ -73,23 +71,24 @@ private:
 public:
   SignalModulation(const ProtocolConfig& p);
 
+  void set_strategy(ModulationStrategy* strategy);
+
+  Spectrum* get_spectrum(int offset);
+
   /**
    * Enqueue a frame of samples (length p.N) into the internal sample buffer and
    * trim old samples. May trigger detection or state transitions.
    */
   void enqueue_frame(const std::vector<float> &samples);
 
-  waveform transmit_data(std::vector<uint8_t> &data);
-
   /**
    * Build a transmit waveform for the contents of `tx_buffer`.
    * Returns the waveform samples to play.
    */
-  waveform modulate();
+  waveform transmit_data(std::vector<uint8_t> &data);
 
   /**
    * Process/demodulate received data.
-   *
    * calculate spectrum at sync_offset and add coresponding bytes to rx_bytes
    */
   void demodulate();
