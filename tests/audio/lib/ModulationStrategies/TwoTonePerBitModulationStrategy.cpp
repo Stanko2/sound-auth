@@ -1,5 +1,6 @@
 #include "../modulation.h"
 #include <cassert>
+#include <string>
 #include <vector>
 
 TwoTonePerBitModulationStrategy::TwoTonePerBitModulationStrategy(const std::vector<int> &frequencies) {
@@ -14,11 +15,15 @@ std::string TwoTonePerBitModulationStrategy::modulate(const std::vector<bool> &d
   while (done < data.size()) {
     for (int i = 0; i < frequencies.size() / 2; i++) {
       if (data[done]) {
-        out += bin_to_freq(frequencies[2*i + 1]);
+        out += std::to_string(bin_to_freq(frequencies[2*i + 1]));
       } else {
-        out += bin_to_freq(frequencies[2*i]);
+        out += std::to_string(bin_to_freq(frequencies[2*i]));
       }
       out += ",";
+      done ++;
+      if(done >= data.size()) {
+        break;
+      }
     }
 
     out = out.substr(0, out.size() - 1);
@@ -33,9 +38,16 @@ std::vector<bool> TwoTonePerBitModulationStrategy::demodulate(int offset) {
   Spectrum* s = sm->get_spectrum(offset);
   std::vector<bool> out(frequencies.size() / 2);
 
+  // for (int i = 0; i < frequencies.size(); i++) {
+  //   std::cout << s->strength(frequencies[i]) << " ";
+  // }
+  // std::cout << std::endl;
+
   for (int i = 0; i < out.size(); i++) {
     out[i] = s->strength(frequencies[2*i + 1]) >=s->strength(frequencies[2*i]);
+    // std::cout << out[i];
   }
+  // std::cout << ' ';
 
   delete s;
   return out;

@@ -17,6 +17,15 @@
 #include "transfer-lib/waveforms.h"
 #include "audio.cpp"
 
+struct Context {
+    Ringbuffer<float>* input_buffer;
+    Ringbuffer<float>* output_buffer;
+
+    ProtocolConfig p;
+    SignalModulation* s;
+    std::atomic<bool> running;
+    
+};
 
 std::string jstring2string(JNIEnv *env, jstring jStr) {
     if (!jStr)
@@ -82,19 +91,29 @@ void RunRecordLoop(const ProtocolConfig *p, SignalModulation* s) {
     }
 }
 
+
+
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_OpenStreams(JNIEnv *env, jobject thiz) {
     ProtocolConfig* p = createProtocolConfig(1024);
-    p->peak_threshold = 0.1f;
-    std::vector<int> freqs = {p->f1, p->f1 + 10, p->f2, p->f2 + 10};
+    p->lowest_strength = -125;
+    p->strength_threshold = -90;
     OpenInputStream(*p);
     OpenOutputStream(*p);
-    input_buffer = new Ringbuffer<float>(7*p->N);
+    input_buffer = new Ringbuffer<float>(50*p->N);
     output_buffer = new Ringbuffer<float>(0);
     StartStreams();
     record_loop_running = true;
     s = new SignalModulation(*p);
+    s->set_tx_callback([](waveform w) {
+        output_buffer->resize(w.size());
+        for(float i : w) {
+            output_buffer->add(i);
+        }
+    });
+    std::cout << "path: " << std::filesystem::current_path() << std::endl;
+    std::vector<int> freqs = {p->f1, p->f1 + 10, p->f2, p->f2 + 10};
     s->set_strategy(new TwoTonePerBitModulationStrategy(freqs));
     std::thread thread(RunRecordLoop, p, s);
     thread.detach();
@@ -106,15 +125,14 @@ JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_sendData(JNIEnv *env, jobject thiz,
                                                           jbyteArray data) {
     if (s == nullptr) return;
+//    ProtocolConfig* p = createProtocolConfig(1024);
+//    p->peak_threshold = 0.1f;
+//    std::vector<int> freqs = {p->f1, p->f1 + 10, p->f2, p->f2 + 10};
+//    s->set_strategy(new TwoTonePerBitModulationStrategy(freqs));
     jsize len = env->GetArrayLength(data);
     std::vector<uint8_t> msg(len);
     env->GetByteArrayRegion(data, 0, len, reinterpret_cast<jbyte*>(msg.data()));
     std::cout << "Len: " << len << std::endl;
-
-    std::vector<float> output = s->transmit_data(msg);
-    output_buffer->resize(output.size());
-    for(float i : output) {
-        output_buffer->add(i);
-    }
+    s->transmit_data(msg);
     std::cout << "Output size: " << output_buffer->size() << std::endl;
 }

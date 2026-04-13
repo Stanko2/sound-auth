@@ -117,14 +117,14 @@ waveform Waveforms::getWaveform(const std::string data,
     for (auto &f : frame_waveform) {
       out.push_back(f);
     }
-    std::cout << "waveform size: " << out.size() << std::endl;
+    // std::cout << "waveform size: " << out.size() << std::endl;
   }
 
   normalize(out);
   return out;
 }
 
-Spectrum *Waveforms::get_spectrum(const waveform &waveform, int sample_rate) {
+Spectrum *Waveforms::get_spectrum(const waveform &waveform, int sample_rate, float min_strength) {
 #ifdef __ANDROID__
   fftwf_complex *in, *out;
   fftwf_plan p;
@@ -174,7 +174,7 @@ Spectrum *Waveforms::get_spectrum(const waveform &waveform, int sample_rate) {
   fftw_free(out);
 #endif
 
-  return new Spectrum(ret);
+  return new Spectrum(ret, min_strength);
 }
 
 std::vector<Peak> Waveforms::get_peaks(Spectrum *spectrum, int sample_rate,
@@ -259,8 +259,9 @@ Waveforms::~Waveforms() {
 #endif
 }
 
-Spectrum::Spectrum(std::vector<std::complex<float>> &data) {
+Spectrum::Spectrum(std::vector<std::complex<float>> &data, float m) {
   this->data = data;
+  min_strength = m;
 }
 
 const float Spectrum::mag(const int f) {
@@ -274,7 +275,7 @@ const float Spectrum::strength(const int f) {
     s += mag(f);
   }
 
-  return 20 * std::log10(s / (10 * data.size()));
+  return std::max(min_strength, 20 * std::log10(s / (10 * data.size())));
 }
 
 const float Spectrum::phase(const int f) {

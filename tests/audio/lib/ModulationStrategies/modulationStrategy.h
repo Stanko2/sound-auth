@@ -1,3 +1,6 @@
+#ifndef MODULATIONSTRATEGY_H
+#define MODULATIONSTRATEGY_H
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -66,3 +69,5 @@ class MultiToneModulationStrategy : public ModulationStrategy {
   std::string modulate(const std::vector<bool> &data) override;
   std::vector<bool> demodulate(int frame_offset) override;
 };
+
+#endif // MODULATIONSTRATEGY_H

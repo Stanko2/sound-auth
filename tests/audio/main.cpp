@@ -1,186 +1,242 @@
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_audio.h>
-#include <SDL2/SDL_events.h>
-#include <SDL2/SDL_stdinc.h>
-#include <SDL2/SDL_timer.h>
-#include <cassert>
-#include <cstdlib>
+#include <atomic>
+#include <chrono>
 #include <iostream>
-#include <ostream>
+#include <pipewire/pipewire.h>
+#include <spa/param/audio/format-utils.h>
+#include <string>
+#include <thread>
 #include <vector>
+
+#include "ModulationStrategies/modulationStrategy.h"
+#include "RingBuffer.h"
 #include "lib/filter.h"
-#include "lib/waveforms.h"
 #include "lib/modulation.h"
+#include "lib/waveforms.h"
+#include "pipewire/main-loop.h"
+#include "pipewire/properties.h"
+#include "pipewire/stream.h"
+#include "tests/transferTest.h"
 
-SDL_AudioSpec captureSpec;
-SDL_AudioSpec playbackSpec;
-SDL_AudioDeviceID captureDevice;
-SDL_AudioDeviceID playbackDevice;
-double sampleRate = 48000;
-ProtocolConfig p;
+// --- Global/Context Structure ---
+struct Context {
+  struct pw_main_loop *loop;
+  struct pw_stream *capture_stream;
+  struct pw_stream *playback_stream;
 
-void init_capture() {
-    SDL_zero(captureSpec);
+  Ringbuffer<float> *input_buffer;
+  Ringbuffer<float> *output_buffer;
 
-    captureSpec.freq = sampleRate;
-    captureSpec.format = AUDIO_F32;
-    captureSpec.channels = 1;
-    captureSpec.samples = 1024;
-    captureSpec.callback = NULL;
+  ProtocolConfig p;
+  SignalModulation *s;
+  std::atomic<bool> running;
+};
 
-    SDL_AudioSpec obtained;
-    SDL_zero(obtained);
+// --- PipeWire Callbacks ---
 
-    captureDevice =
-        SDL_OpenAudioDevice(NULL, SDL_TRUE, &captureSpec, &obtained, 0);
+static void on_process_playback(void *userdata) {
+  Context *app = (Context *)userdata;
+  struct pw_buffer *b;
+  if (!(b = pw_stream_dequeue_buffer(app->playback_stream)))
+    return;
 
+  struct spa_buffer *buf = b->buffer;
+  float *dst = (float *)buf->datas[0].data;
+  uint32_t n_frames = buf->datas[0].maxsize / sizeof(float);
 
-    if (!captureDevice) {
-        std::cerr << "Failed to open audio capture device" << std::endl;
+  for (uint32_t i = 0; i < n_frames; i++) {
+    float sample = 0.0f;
+    if (app->output_buffer && app->output_buffer->size() > 0) {
+      app->output_buffer->pop(sample);
     }
+    dst[i] = sample;
+  }
+
+  buf->datas[0].chunk->offset = 0;
+  buf->datas[0].chunk->size = n_frames * sizeof(float);
+  buf->datas[0].chunk->stride = sizeof(float);
+  pw_stream_queue_buffer(app->playback_stream, b);
 }
 
-void init_playback() {
-    SDL_zero(playbackSpec);
+static void on_process_capture(void *userdata) {
+  Context *app = (Context *)userdata;
+  struct pw_buffer *b;
+  if (!(b = pw_stream_dequeue_buffer(app->capture_stream)))
+    return;
+  if (app->input_buffer == nullptr)
+    return;
 
-    playbackSpec.freq = sampleRate;
-    playbackSpec.format = AUDIO_F32;
-    playbackSpec.channels = 1;
-    playbackSpec.samples = 1024;
-    playbackSpec.callback = NULL;
-
-    SDL_AudioSpec obtained;
-    SDL_zero(obtained);
-
-    playbackDevice =
-        SDL_OpenAudioDevice(NULL, SDL_FALSE, &captureSpec, &obtained, 0);
-
-
-    if (!playbackDevice) {
-        std::cerr << "Failed to open audio playback device" << std::endl;
+  struct spa_buffer *buf = b->buffer;
+  float *src = (float *)buf->datas[0].data;
+  if (src) {
+    uint32_t n_frames = buf->datas[0].chunk->size / sizeof(float);
+    for (uint32_t i = 0; i < n_frames; i++) {
+      app->input_buffer->add(src[i]);
     }
+  }
+  pw_stream_queue_buffer(app->capture_stream, b);
 }
 
-int freq_to_bin(ProtocolConfig &p, int f) {
-  float delta = (float)p.N / (float)p.sample_rate;
-  return f * delta;
+static void on_stream_state_changed(void *data, enum pw_stream_state old,
+                                    enum pw_stream_state state,
+                                    const char *error) {
+  printf("Stream state changed: %s -> %s\n", pw_stream_state_as_string(old),
+         pw_stream_state_as_string(state));
+  if (state == PW_STREAM_STATE_ERROR) {
+    fprintf(stderr, "Stream error: %s\n", error);
+  }
 }
 
-void analyzeFrequencies() {
-    SDL_PauseAudioDevice(captureDevice, 0);
+static const struct pw_stream_events capture_events = {
+    .version = PW_VERSION_STREAM_EVENTS,
+    .state_changed = on_stream_state_changed,
+    .process = on_process_capture};
+static const struct pw_stream_events playback_events = {
+    .version = PW_VERSION_STREAM_EVENTS,
+    .state_changed = on_stream_state_changed,
+    .process = on_process_playback};
 
-    bool running = true;
-    // std::ofstream outputFile("data.wav", std::ios::binary);
-    SignalModulation* s = new SignalModulation(p);
+void init_pw_common(Context &app) {
+  pw_init(NULL, NULL);
+  app.loop = pw_main_loop_new(NULL);
+  app.running = true;
 
-    std::vector<int> freqs = {p.f1, p.f1 + 10, p.f2, p.f2 + 10};
+  struct spa_audio_info_raw info =
+      SPA_AUDIO_INFO_RAW_INIT(.format = SPA_AUDIO_FORMAT_F32, .rate = 48000,
+                              .channels = 1);
 
-    s->set_strategy(new TwoTonePerBitModulationStrategy(freqs));
-    // int total = 0;
-    while(running) {
-        while(SDL_GetQueuedAudioSize(captureDevice) < p.N * sizeof(float)) {
-            SDL_Delay(10);
-        }
+  uint8_t buffer[1024];
+  struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
+  const struct spa_pod *params[1];
+  params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
 
-        SDL_Event e;
-        while(SDL_PollEvent(&e)) {
-            if(e.type == SDL_QUIT) running = false;
-        }
+  struct pw_properties *capture_props = pw_properties_new(
+      PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY, "Capture",
+      PW_KEY_MEDIA_ROLE, "Communication", PW_KEY_NODE_NAME,
+      "sound-transfer-capture", PW_KEY_NODE_DESCRIPTION,
+      "Frequency Detector Input", "media.class", "Stream/Input/Audio", NULL);
 
-        std::vector<float> samples(p.N);
-        int bytes = SDL_DequeueAudio(captureDevice, samples.data(), p.N * sizeof(float));
+  struct pw_properties *playback_props = pw_properties_new(
+      PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY, "Playback",
+      PW_KEY_MEDIA_ROLE, "Communication", PW_KEY_NODE_NAME,
+      "sound-transfer-playback", PW_KEY_NODE_DESCRIPTION,
+      "Data Transmitter Output", "media.class", "Stream/Output/Audio", NULL);
 
-        // if (bytes > 0) {
-        //     outputFile.write(reinterpret_cast<const char*>(samples.data()), bytes);
-        //     total += bytes;
-        // }
+  pw_properties_set(capture_props, "target.object", "@DEFAULT_SOURCE@");
+  pw_properties_set(playback_props, "target.object", "@DEFAULT_SINK@");
 
+  app.capture_stream =
+      pw_stream_new_simple(pw_main_loop_get_loop(app.loop), "Capture",
+                           capture_props, &capture_events, &app);
 
-        // get_spectrum(samples, (int)sampleRate);
-        s->enqueue_frame(samples);
-    }
+  app.playback_stream =
+      pw_stream_new_simple(pw_main_loop_get_loop(app.loop), "Playback",
+                           playback_props, &playback_events, &app);
 
-    delete s;
-    // finalizeWav(outputFile, total, 1, p.sample_rate, 32);
+  pw_stream_connect(app.capture_stream, PW_DIRECTION_INPUT, PW_ID_ANY,
+                    (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
+                                      PW_STREAM_FLAG_MAP_BUFFERS),
+                    params, 1);
+
+  pw_stream_connect(app.playback_stream, PW_DIRECTION_OUTPUT, PW_ID_ANY,
+                    (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
+                                      PW_STREAM_FLAG_RT_PROCESS |
+                                      PW_STREAM_FLAG_MAP_BUFFERS),
+                    params, 1);
 }
 
-void playTones(std::string frequencyData) {
-    SDL_PauseAudioDevice(playbackDevice, 0);
-    bool running = true;
-
-    Waveforms* w = new Waveforms(0,0, new HannWindow(p.N));
-
-    std::vector<float> waveForm = w->getWaveform(frequencyData, 1024, (int)sampleRate);
-    // normalize(waveForm);
-    SDL_QueueAudio(playbackDevice, waveForm.data(), waveForm.size() * sizeof(float));
-    std::cout << "Enqueued " << SDL_GetQueuedAudioSize(playbackDevice) / 4 << " samples\n";
-
-
-    while(SDL_GetQueuedAudioSize(playbackDevice) > 0) {
-        SDL_Delay(1);
-        SDL_Event e;
-        while(SDL_PollEvent(&e)) {
-            if(e.type == SDL_QUIT) running = false;
-        }
+void analyzeFrequencies(Context &app) {
+  std::thread worker([&]() {
+    std::vector<float> frame(app.p.N);
+    while (app.running) {
+      if (app.input_buffer->size() >= app.p.N) {
+        for (int i = 0; i < app.p.N; i++)
+          app.input_buffer->pop(frame[i]);
+        app.s->enqueue_frame(frame);
+      } else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      }
     }
-    // }
+  });
+
+  pw_main_loop_run(app.loop);
+  app.running = false;
+  worker.join();
 }
 
-void sendData(std::string data) {
-    SDL_PauseAudioDevice(playbackDevice, 0);
-    bool running = true;
+void sendData(Context &app, std::string data) {
+  std::vector<uint8_t> vec(data.begin(), data.end());
+  app.s->transmit_data(vec);
 
-    SignalModulation* s = new SignalModulation(p);
-
-    std::vector<uint8_t> vec(data.begin(), data.end());
-    waveform w = s->transmit_data(vec);
-    SDL_QueueAudio(playbackDevice, w.data(), w.size() * sizeof(float));
-
-    while(SDL_GetQueuedAudioSize(playbackDevice) > 0) {
-        SDL_Delay(1);
-        SDL_Event e;
-        while(SDL_PollEvent(&e)) {
-            if(e.type == SDL_QUIT) running = false;
-        }
+  // Watcher thread to close when done
+  std::thread watcher([&]() {
+    while (app.output_buffer->size() > 0) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    pw_main_loop_quit(app.loop);
+  });
 
+  pw_main_loop_run(app.loop);
+  watcher.join();
 }
 
-int main(int argc, const char* argv[]) {
-    if (argc == 1) {
-        std::cout << "No action provided" << std::endl;
-    }
-    setenv("SDL_AUDIODRIVER", "pipewire", 1);
+void run_tx_tests(Context* app) {
+  std::thread runner([&]() {
+    test_tx(app->s, [&](waveform w) {
+      app->output_buffer->resize(w.size());
+      for(float s: w) {
+        app->output_buffer->add(s);
+      }
 
-    p.N = 1024;
-    p.sample_rate = 48000;
-    p.peak_threshold = 3;
-    p.f1 = freq_to_bin(p, 15000);
-    p.f2 = freq_to_bin(p, 17000);
+      while (app->output_buffer->size() > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    });
+    pw_main_loop_quit(app->loop);
+  });
 
-    // std::cout << "f1: " << p.f1 << "f2: " << p.f2 << std::endl;
+  pw_main_loop_run(app->loop);
+  runner.join();
+  pw_main_loop_quit(app->loop);
+}
 
-    SDL_Init(SDL_INIT_AUDIO);
-    init_capture();
-    init_playback();
+int main(int argc, const char *argv[]) {
+  if (argc < 2) {
+    std::cout << "Usage: " << argv[0] << " [detect|play|send] [data]"
+              << std::endl;
+    return 1;
+  }
 
-    std::string cmd(argv[1]);
-    if (cmd == "detect") {
-        analyzeFrequencies();
-    }
-    else if (cmd == "play") {
-        playTones(argv[2]);
-    } else if (cmd == "send") {
-        sendData(argv[2]);
-    }
+  Context app;
+  app.p.N = 1024;
+  app.p.sample_rate = 48000;
+  app.input_buffer = new Ringbuffer<float>(30 * app.p.N);
+  app.output_buffer = new Ringbuffer<float>(10 * app.p.sample_rate);
 
+  app.p = *createProtocolConfig(1024);
+  app.p.lowest_strength = -100;
+  app.p.strength_threshold = -45;
 
+  app.s = new SignalModulation(app.p);
+  std::vector<int> freqs = {app.p.f1, app.p.f1 + 10, app.p.f2, app.p.f2 + 10};
+  app.s->set_strategy(new TwoTonePerBitModulationStrategy(freqs));
+  app.s->set_tx_callback([&](waveform w) {
+    app.output_buffer->resize(w.size());
+    for (float a : w)
+      app.output_buffer->add(a);
+  });
 
-    // for (int i = 0; i < 20; ++i)
-    //     std::cout << samples[i] << " ";
-    // std::cout << std::endl;
-    // std::cout << "Dequeued " << bytes << " bytes\n";
+  init_pw_common(app);
 
-    // std::cout << "delta-f: " << sampleRate / samplesNeeded << std::endl;
+  std::string cmd(argv[1]);
+  if (cmd == "detect") {
+    analyzeFrequencies(app);
+  } else if (cmd == "send" || cmd == "play") {
+    sendData(app, argv[2]);
+  } else if (cmd == "tx-tests") {
+    run_tx_tests(&app);
+  }
 
+  return 0;
 }

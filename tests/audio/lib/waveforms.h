@@ -35,8 +35,9 @@ inline std::ostream& operator<<(std::ostream& os, const std::vector<float>& p) {
 class Spectrum {
 private:
     std::vector<std::complex<float>> data;
+    float min_strength;
 public:
-    Spectrum(std::vector<std::complex<float>>& data);
+    Spectrum(std::vector<std::complex<float>>& data, float min_strength);
 
     // get magnitude of frequency f in this spectrum
     const float mag(const int f);
@@ -90,7 +91,7 @@ public:
     */
     std::vector<float> getWaveform(const std::string data, const int samples_per_frame, const int sample_rate);
 
-    Spectrum* get_spectrum(const std::vector<float>& waveform, int sample_rate);
+    Spectrum* get_spectrum(const std::vector<float>& waveform, int sample_rate, float min_strength);
 
     /*
      * Tries to get peaks from the spectrum - old method, not used

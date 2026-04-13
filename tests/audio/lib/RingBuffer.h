@@ -4,6 +4,7 @@
 
 #ifndef SOUND_AUTH_RINGBUFFER_H
 #define SOUND_AUTH_RINGBUFFER_H
+#include <iostream>
 #include <stdexcept>
 #include <mutex>
 #include <vector>
@@ -56,7 +57,7 @@ bool Ringbuffer<T>::pop(T& val) {
         return false;
     }
     n_elements--;
-    val =  memory[start++ % memory.capacity()];
+    val =  memory[start++ % memory.size()];
     return true;
 }
 
@@ -67,13 +68,13 @@ T Ringbuffer<T>::get(int index) {
         return 0;
     }
     const std::lock_guard<std::mutex> g(lock);
-    return memory[(start + index) % memory.capacity()];
+    return memory[(start + index) % memory.size()];
 }
 
 template <class T>
 bool Ringbuffer<T>::add(const T & value) {
     const std::lock_guard<std::mutex> g(lock);
-    memory[++end % memory.capacity()] = value;
+    memory[++end % memory.size()] = value;
     if(full()) {
         ++start;
         return false;
@@ -90,7 +91,7 @@ ssize_t Ringbuffer<T>::size() const{
 
 template <class T>
 bool Ringbuffer<T>::full() {
-    return size() == memory.capacity();
+    return n_elements == memory.size();
 }
 
 template <class T>

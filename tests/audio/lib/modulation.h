@@ -4,11 +4,14 @@
 #include <cstdint>
 #include <deque>
 #include <fstream>
+#include <functional>
 #include <vector>
 
 #include "RingBuffer.h"
 #include "waveforms.h"
 #include "ModulationStrategies/modulationStrategy.h"
+
+#define MAX_MESSAGE_SIZE 128
 
 struct ProtocolConfig {
     // marker frequency 1
@@ -18,7 +21,8 @@ struct ProtocolConfig {
     // FFT window size / samples-per-frame
     int N;
     int sample_rate;
-    float peak_threshold;
+    float lowest_strength;
+    float strength_threshold;
     // message length in frames
     size_t max_message_length;
 };
@@ -40,6 +44,19 @@ private:
   int msg_frames;
   ProtocolConfig p;
   Waveforms *waveforms;
+  std::vector<uint8_t> received_bytes;
+
+  /*
+   * function to call when message is received
+   */
+  std::function<void(std::vector<uint8_t> msg)> rx_callback;
+
+  /*
+   * Function to call to play some media
+   */
+  std::function<void(waveform waveform)> tx_callback;
+
+
 
   std::ofstream marker_file;
   std::ofstream message_file;
@@ -77,7 +94,7 @@ public:
 
   /**
    * Enqueue a frame of samples (length p.N) into the internal sample buffer and
-   * trim old samples. May trigger detection or state transitions.
+   * removes old samples.
    */
   void enqueue_frame(const std::vector<float> &samples);
 
@@ -89,13 +106,30 @@ public:
 
   /**
    * Process/demodulate received data.
-   * calculate spectrum at sync_offset and add coresponding bytes to rx_bytes
+   * calculate spectrum at sync_offset and add coresponding bits to rx_buffer
    */
   void demodulate();
+
+  // Set the callback that will be invoked when a waveform is ready to be transmitted.
+  // The callback receives the generated waveform (vector<float>).
+  void set_tx_callback(const std::function<void(waveform)> &cb);
+
+  // Set the callback that will be invoked when a full message (bytes) is received.
+  void set_rx_callback(const std::function<void(std::vector<uint8_t>)> &cb);
 
   ~SignalModulation();
 };
 
+
+/*
+ * Create a ProtocolConfig structure
+ * N: FFT window size
+ * sample_rate: audio sample rate in Hz
+ * f1: 1st marker frequency (in Hz)
+ * f2: 2nd marker frequency (in Hz)
+ * min_strength: intensity at which there is no signal - lowest possible strength (in dB)
+ * strength_threshold: intensity at which there is considered frequency as present (in dB)
+ */
 ProtocolConfig* createProtocolConfig(int N = 2048, int sample_rate = 48000,
                                   int f1 = 15000, int f2 = 17000,
-                                  float peak_threshold = 10);
+                                  float min_strength = -100, float strength_threshold = -45);
