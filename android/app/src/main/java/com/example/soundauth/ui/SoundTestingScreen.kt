@@ -130,6 +130,11 @@ class SoundTestingScreen() {
             }
 
             Text(msg.toBitString())
+            Button(onClick = {
+                testTx()
+            }) {
+                Text("Send test messages")
+            }
 
             logger.UI()
         }
@@ -142,4 +147,6 @@ class SoundTestingScreen() {
     external fun sendData(data: ByteArray)
 
     external fun CloseStreams()
+
+    external fun testTx()
 }

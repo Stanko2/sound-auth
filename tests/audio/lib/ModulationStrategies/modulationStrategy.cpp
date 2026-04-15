@@ -1,3 +1,4 @@
+#include "ModulationStrategies/modulationStrategy.h"
 #include "../modulation.h"
 
 void ModulationStrategy::Init(SignalModulation* s, ProtocolConfig* p) {
@@ -5,7 +6,11 @@ void ModulationStrategy::Init(SignalModulation* s, ProtocolConfig* p) {
   this->p = p;
 }
 
-float ModulationStrategy::bin_to_freq(int bin) {
+float ModulationStrategy::bin_to_freq(int bin) const  {
   float delta = (float)p->sample_rate / (float)p->N;
   return bin * delta;
+}
+
+void ModulationStrategy::print(std::ostream& os) const {
+  os << "ModulationStrategy";
 }

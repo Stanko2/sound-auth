@@ -3,6 +3,7 @@
 #include "waveforms.h"
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -12,12 +13,14 @@
 #include <fstream>
 #include <ios>
 #include <iostream>
+#include <ostream>
 #include <string>
 #include <vector>
 
 SignalModulation::SignalModulation(const ProtocolConfig &p) {
   this->p = p;
-  std::cout << "lowest strength: " << p.lowest_strength << "dB threshold: " << p.strength_threshold << "dB\n";
+  std::cout << "lowest strength: " << p.lowest_strength
+            << "dB threshold: " << p.strength_threshold << "dB\n";
   recorder_state = idle;
   waveforms = new Waveforms(10 * p.N, p.N, new GaussianWindow(p.N, 4.5));
   waveforms->addFilter((Filter *)new CombFilter(p.sample_rate, 200, 0));
@@ -43,10 +46,10 @@ int SignalModulation::detect_begin() {
   std::vector<int> marker = {p.f2, p.f1, 0, p.f2};
   // float max_mag = 0;
   // float min_mag = 0;
-
-  Spectrum* s0 = get_spectrum(1*p.N);
-  Spectrum* s1 = get_spectrum(2*p.N);
-  Spectrum* s2 = get_spectrum(3*p.N);
+  const auto sync_begin = std::chrono::high_resolution_clock::now();
+  Spectrum *s0 = get_spectrum(1 * p.N);
+  Spectrum *s1 = get_spectrum(2 * p.N);
+  Spectrum *s2 = get_spectrum(3 * p.N);
 
   if (s0->strength(p.f2) > p.strength_threshold) {
     return -1;
@@ -85,13 +88,17 @@ int SignalModulation::detect_begin() {
   std::cout << "Detected start marker" << std::endl;
   Spectrum *s = nullptr;
   Spectrum *last = nullptr;
-  for (int offset = 0; offset < 2 * p.N; offset++) {
+  const int offset_step = 3;
+  for (int offset = 0; offset < 3 * p.N; offset += offset_step) {
     s = get_spectrum(p.N + offset);
     float noise = get_noise(s);
-    data << offset << "," << s->strength(p.f1) << "," << s->strength(p.f2) << "," << noise << ",";
+    data << offset << "," << s->strength(p.f1) << "," << s->strength(p.f2)
+         << "," << noise << ",";
     if (last != nullptr) {
-      float df1 = (s->strength(p.f1) - last->strength(p.f1)) * p.sample_rate;
-      float df2 = (s->strength(p.f2) - last->strength(p.f2)) * p.sample_rate;
+      float df1 = (s->strength(p.f1) - last->strength(p.f1)) * p.sample_rate /
+                  (float)offset_step;
+      float df2 = (s->strength(p.f2) - last->strength(p.f2)) * p.sample_rate /
+                  (float)offset_step;
       data << df1 << "," << df2 << std::endl;
       if (df1 > max_df1) {
         max_df1 = df1;
@@ -120,19 +127,31 @@ int SignalModulation::detect_begin() {
   int offset_derivative = (offset_max_df1 + offset_max_df2) / 2;
   std::cout << "after correction mag: " << best_offset_mag << std::endl;
   for (int i = 0; i < marker.size(); i++) {
-    Spectrum* s = get_spectrum(best_offset_mag + p.N * (i - 2));
+    Spectrum *s = get_spectrum(best_offset_mag + p.N * (i - 2));
     std::cout << i << ". frame: F1:" << s->mag(p.f1) << " - " << s->phase(p.f1);
     std::cout << " F2: " << s->mag(p.f2) << " - " << s->phase(p.f2)
               << std::endl;
+    delete s;
   }
-  std::cout << "offset F1: " << offset_max_df1 << " offset F2: " << offset_max_df2 << " calculated offset: " << offset_derivative << std::endl;
+  std::cout << "offset F1: " << offset_max_df1
+            << " offset F2: " << offset_max_df2
+            << " calculated offset: " << offset_derivative << std::endl;
   for (int i = 0; i < marker.size(); i++) {
-    Spectrum* s = get_spectrum(offset_derivative + p.N * (i-1));
+    Spectrum *s = get_spectrum(offset_derivative + p.N * (i - 1));
     std::cout << i << ". frame: F1:" << s->mag(p.f1) << " - " << s->phase(p.f1);
     std::cout << " F2: " << s->mag(p.f2) << " - " << s->phase(p.f2)
               << std::endl;
+    delete s;
   }
 
+  const auto sync_stop = std::chrono::high_resolution_clock::now();
+
+  const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+      sync_stop - sync_begin);
+  std::cout << "synchronization took: " << duration.count() << "ms"
+            << std::endl;
+
+  data.close();
   if (abs((offset_max_df1 - offset_max_df2) - 1000) < 150) {
     std::cout << "using max derivative synchronization" << std::endl;
     return offset_derivative;
@@ -173,7 +192,7 @@ void SignalModulation::enqueue_frame(const std::vector<float> &samples) {
       }
     }
   } else if (recorder_state == processing) {
-    if (msg_frames < MAX_MESSAGE_SIZE) {
+    if (msg_frames < p.max_message_length) {
       demodulate();
       msg_frames++;
     } else {
@@ -181,23 +200,21 @@ void SignalModulation::enqueue_frame(const std::vector<float> &samples) {
       message_data_file.close();
       msg_frames = 0;
       std::cout << std::endl;
-      received_bytes.clear();
       if (rx_callback != nullptr) {
         rx_callback(received_bytes);
       }
+      received_bytes.clear();
     }
   }
 }
 
-
-float bin_to_freq(ProtocolConfig* p, int bin) {
+float bin_to_freq(const ProtocolConfig *p, int bin) {
   float delta = (float)p->sample_rate / (float)p->N;
   return bin * delta;
 }
 
-
 waveform SignalModulation::transmit_data(std::vector<uint8_t> &data) {
-  assert(data.size() <= MAX_MESSAGE_SIZE);
+  assert(data.size() <= p.max_message_length);
 
   tx_buffer.clear();
   for (uint8_t byte : data) {
@@ -206,7 +223,6 @@ waveform SignalModulation::transmit_data(std::vector<uint8_t> &data) {
     }
   }
 
-  // TODO: add marker
   std::string f1 = std::to_string(bin_to_freq(&p, p.f1));
   std::string f2 = std::to_string(bin_to_freq(&p, p.f2));
   std::string marker = f2 + "|" + f1 + "|0|" + f2 + "|";
@@ -243,7 +259,8 @@ void SignalModulation::demodulate() {
   if (message_data_file.is_open()) {
     for (int i = 0; i <= p.N; i++) {
       waveform frame = waveforms->get_frame(sync_offset + 2 * p.N + i);
-      Spectrum *s = waveforms->get_spectrum(frame, p.sample_rate, p.lowest_strength);
+      Spectrum *s =
+          waveforms->get_spectrum(frame, p.sample_rate, p.lowest_strength);
       message_data_file << s->strength(p.f1) << "," << s->strength(p.f2) << ","
                         << (i == p.N) << std::endl;
 
@@ -259,7 +276,7 @@ void SignalModulation::demodulate() {
 
   if (rx_buffer.size() == 8) {
     // message_file << "Received byte: " << ToByte(rx_buffer) << std::endl;
-    std::cout << ToByte(rx_buffer);
+    std::cout << ToByte(rx_buffer) << std::flush;
     received_bytes.push_back(ToByte(rx_buffer));
     rx_buffer.clear();
   }
@@ -270,16 +287,19 @@ void SignalModulation::set_strategy(ModulationStrategy *strategy) {
   strategy->Init(this, &p);
 }
 
-void SignalModulation::set_tx_callback(const std::function<void(waveform)> &cb) {
+void SignalModulation::set_tx_callback(
+    const std::function<void(waveform)> &cb) {
   tx_callback = cb;
 }
 
-void SignalModulation::set_rx_callback(const std::function<void(std::vector<uint8_t>)> &cb) {
+void SignalModulation::set_rx_callback(
+    const std::function<void(std::vector<uint8_t>)> &cb) {
   rx_callback = cb;
 }
 
 ProtocolConfig *createProtocolConfig(int N, int sample_rate, int f1, int f2,
-                                     float min_strength, float strength_threshold) {
+                                     float min_strength,
+                                     float strength_threshold) {
   ProtocolConfig *p = new ProtocolConfig();
   p->N = N;
   p->sample_rate = sample_rate;
@@ -287,8 +307,21 @@ ProtocolConfig *createProtocolConfig(int N, int sample_rate, int f1, int f2,
   p->f2 = f2 * p->N / p->sample_rate;
   p->lowest_strength = min_strength;
   p->strength_threshold = strength_threshold;
+  p->max_message_length = 64;
 
   return p;
+}
+
+std::ostream &operator<<(std::ostream &os, const ProtocolConfig &config) {
+  os << "ProtocolConfig {\n"
+     << "  Marker Frequencies: " << bin_to_freq(&config, config.f1) << " Hz, " << bin_to_freq(&config, config.f2) << " Hz\n"
+     << "  FFT Window Size (N): " << config.N << "\n"
+     << "  Sample Rate: " << config.sample_rate << " Hz\n"
+     << "  Strength: [Min: " << config.lowest_strength << "dB"
+     << ", Threshold: " << config.strength_threshold << "dB]\n"
+     << "  Max Message Length: " << config.max_message_length << " frames\n"
+     << "}";
+  return os;
 }
 
 SignalModulation::~SignalModulation() {

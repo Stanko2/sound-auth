@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <random>
 #include <sstream>
 #include <thread>
@@ -39,17 +40,20 @@ std::vector<uint8_t> gen_random_msg(int seed, int length) {
   std::vector<uint8_t> out;
   if (length <= 0)
     return out;
+
   std::mt19937 rng(static_cast<unsigned int>(seed));
-  std::uniform_int_distribution<int> dist(0, 255);
+
   out.reserve(length);
   for (int i = 0; i < length; ++i) {
-    out.push_back(static_cast<uint8_t>(dist(rng)));
+    uint8_t val = static_cast<uint8_t>(rng() & 0xFF);
+    out.push_back(val);
   }
+
   return out;
 }
 
-void test_tx(SignalModulation *sm, const TxCallback &tx_callback,
-             int messages, int msg_len, int base_seed) {
+void test_tx(SignalModulation *sm, const TxCallback &tx_callback, int messages,
+             int msg_len, int base_seed) {
 
   // Install tx callback into SignalModulation; the modulation layer expects a
   // callback that accepts the waveform (by value). Wrap the provided callback
@@ -76,51 +80,70 @@ void test_tx(SignalModulation *sm, const TxCallback &tx_callback,
 
     // std::this_thread::sleep_for(std::chrono::milliseconds(200));
   }
-
 }
 
-void test_rx(ModulationStrategy *strategy, const RxCallback &rx_callback,
-             int messages, int msg_len, int base_seed) {
-  if (!strategy) {
-    std::cerr << "test_rx: strategy is null\n";
-    return;
+void test_rx(SignalModulation *s, int messages, int msg_len, int base_seed) {
+  struct State {
+    int counter = 0;
+  };
+  auto state = std::make_shared<State>();
+
+  // Helper to format vector as hex string
+  auto to_hex = [](const std::vector<uint8_t> &data,
+                   bool include_space = true) {
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0');
+    for (auto b : data) {
+      ss << std::setw(2) << static_cast<int>(b);
+      if (include_space) {
+        ss << " ";
+      }
+    }
+    return ss.str();
+  };
+
+  auto report_file = std::make_shared<std::ofstream>("report.txt");
+  auto file_mutex = std::make_shared<std::mutex>();
+
+  if (!report_file->is_open()) {
+      std::cerr << "Failed to open report.txt" << std::endl;
+      return;
   }
 
-  ProtocolConfig *pc = createProtocolConfig(1024, 48000, 15000, 17000, 3.0f);
-  SignalModulation sm(*pc);
-  sm.set_strategy(strategy);
+  *report_file << *s;
+  *report_file << "------------------------------------------\n";
+  *report_file << "expected,received,num_errors" << std::endl;
 
-  // If no base_seed provided, fall back to 1 for deterministic tests
-  int seed0 = base_seed;
-  if (seed0 == 0)
-    seed0 = 1;
+  std::cout << "Test receive started" << std::endl;
 
-  int counter = 0;
-
-  sm.set_rx_callback([rx_callback, seed0, msg_len, messages,
-                      &counter](std::vector<uint8_t> received) {
-    int idx = counter;
+  s->set_rx_callback([base_seed, msg_len, messages, state, to_hex, report_file, file_mutex,
+                      s](std::vector<uint8_t> received) {
+    int idx = state->counter;
     if (idx >= messages) {
-      // already received expected number of messages; ignore extras
+      s->set_rx_callback(nullptr);
+      report_file->close();
       return;
     }
 
-    int seed = seed0 + idx;
-    std::vector<uint8_t> expected = gen_random_msg(seed, msg_len);
-
+    std::vector<uint8_t> expected = gen_random_msg(state->counter, msg_len);
     int bits_diff = compare(expected, received);
-    std::cout << "RX idx=" << idx << " seed=" << seed
-              << " bytes=" << received.size() << " bit_errors=" << bits_diff
+
+    std::cout << "------------------------------------------" << std::endl;
+    std::cout << "RX idx: " << idx << " | Seed: " << state->counter
               << std::endl;
+    std::cout << "Errors: " << bits_diff << " bits" << std::endl;
 
-    if (rx_callback)
-      rx_callback(received);
+    std::cout << "EXPECTED: " << to_hex(expected) << std::endl;
+    std::cout << "RECEIVED: " << to_hex(received) << std::endl;
 
-    counter++;
+    std::cout << "report file" << report_file << " " << report_file->is_open() << std::endl;
+
+    {
+      std::lock_guard<std::mutex> lock(*file_mutex);
+    *report_file << to_hex(expected, false) << "," << to_hex(received, false)
+                << "," << bits_diff << std::endl;
+    }
+
+    state->counter++;
   });
-
-  int wait_ms = std::max(1000, messages * 250);
-  std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
-
-  delete pc;
 }

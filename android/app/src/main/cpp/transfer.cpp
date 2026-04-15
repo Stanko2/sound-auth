@@ -16,6 +16,7 @@
 #include "transfer-lib/modulation.h"
 #include "transfer-lib/waveforms.h"
 #include "audio.cpp"
+#include "tests/transferTest.h"
 
 struct Context {
     Ringbuffer<float>* input_buffer;
@@ -24,7 +25,7 @@ struct Context {
     ProtocolConfig p;
     SignalModulation* s;
     std::atomic<bool> running;
-    
+
 };
 
 std::string jstring2string(JNIEnv *env, jstring jStr) {
@@ -106,7 +107,7 @@ Java_com_example_soundauth_ui_SoundTestingScreen_OpenStreams(JNIEnv *env, jobjec
     StartStreams();
     record_loop_running = true;
     s = new SignalModulation(*p);
-    s->set_tx_callback([](waveform w) {
+    s->set_tx_callback([](const waveform& w) {
         output_buffer->resize(w.size());
         for(float i : w) {
             output_buffer->add(i);
@@ -135,4 +136,26 @@ Java_com_example_soundauth_ui_SoundTestingScreen_sendData(JNIEnv *env, jobject t
     std::cout << "Len: " << len << std::endl;
     s->transmit_data(msg);
     std::cout << "Output size: " << output_buffer->size() << std::endl;
+}
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_soundauth_ui_SoundTestingScreen_testTx(JNIEnv *env, jobject thiz) {
+    if (s == nullptr) return;
+    std::thread runner([&](){
+        test_tx(s, [&](const waveform &w){
+            std::cout << "Message" << std::endl;
+            output_buffer->resize(w.size());
+            for(float s: w) {
+                output_buffer->add(s);
+            }
+
+            while (output_buffer->size() > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        });
+
+    });
+
+    runner.join();
 }

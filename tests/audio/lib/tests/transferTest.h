@@ -31,7 +31,7 @@ using RxCallback = std::function<void(const std::vector<uint8_t> &)>;
  * transmit
  *
  * Parameters:
- *  - sm: initialized SignalModulation instance
+ *  - sm: initialized SignalModulation Instance
  *  - tx_callback: called for each generated waveform
  *  - messages: number of messages to generate/transmit (default 8)
  *  - msg_len: message length in bytes (default 8)
@@ -39,7 +39,7 @@ using RxCallback = std::function<void(const std::vector<uint8_t> &)>;
  * implementation may use time)
  */
 void test_tx(SignalModulation* sm, const TxCallback &tx_callback,
-             int messages = 8, int msg_len = 8, int base_seed = 0);
+             int messages = 8, int msg_len = 16, int base_seed = 0);
 
 /*
  * receives given messages, compares them with generated ones and prints number
@@ -54,5 +54,5 @@ void test_tx(SignalModulation* sm, const TxCallback &tx_callback,
  *  - base_seed: base seed used to generate the expected messages (must match
  * test_tx)
  */
-void test_rx(ModulationStrategy *strategy, const RxCallback &rx_callback,
-             int messages = 8, int msg_len = 8, int base_seed = 0);
+void test_rx(SignalModulation *sm,
+             int messages = 8, int msg_len = 16, int base_seed = 0);

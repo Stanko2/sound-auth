@@ -7,30 +7,30 @@
 #include <functional>
 #include <vector>
 
+#include "ModulationStrategies/modulationStrategy.h"
 #include "RingBuffer.h"
 #include "waveforms.h"
-#include "ModulationStrategies/modulationStrategy.h"
-
-#define MAX_MESSAGE_SIZE 128
 
 struct ProtocolConfig {
-    // marker frequency 1
-    int f1;
-    // marker frequency 2
-    int f2;
-    // FFT window size / samples-per-frame
-    int N;
-    int sample_rate;
-    float lowest_strength;
-    float strength_threshold;
-    // message length in frames
-    size_t max_message_length;
+  // marker frequency 1
+  int f1;
+  // marker frequency 2
+  int f2;
+  // FFT window size / samples-per-frame
+  int N;
+  int sample_rate;
+  float lowest_strength;
+  float strength_threshold;
+  // message length in frames
+  size_t max_message_length;
 };
 
 enum State {
-    idle = 0,
-    processing = 1,
+  idle = 0,
+  processing = 1,
 };
+
+std::ostream &operator<<(std::ostream &os, const ProtocolConfig &config);
 
 // Shared runtime buffers/state used by modulation/demodulation
 
@@ -39,7 +39,7 @@ private:
   std::vector<bool> rx_buffer;
   std::vector<bool> tx_buffer;
   State recorder_state;
-  ModulationStrategy* strategy = nullptr;
+  ModulationStrategy *strategy = nullptr;
   int sync_offset;
   int msg_frames;
   ProtocolConfig p;
@@ -56,8 +56,6 @@ private:
    */
   std::function<void(waveform waveform)> tx_callback;
 
-
-
   std::ofstream marker_file;
   std::ofstream message_file;
   std::ofstream message_data_file;
@@ -65,8 +63,7 @@ private:
   /**
    * Check whether spectrum `s` has a peak at bin `i` according to protocol `p`.
    */
-  bool has_peak(Spectrum* s, int i);
-
+  bool has_peak(Spectrum *s, int i);
 
   /*
    * Check if frequency f is present in the spectrum starting at frame_offset
@@ -84,13 +81,14 @@ private:
    * Calculates how much noise is in spectrum
    * (used to find correct synchronization offset)
    */
-  float get_noise(Spectrum* s);
+  float get_noise(Spectrum *s);
+
 public:
-  SignalModulation(const ProtocolConfig& p);
+  SignalModulation(const ProtocolConfig &p);
 
-  void set_strategy(ModulationStrategy* strategy);
+  void set_strategy(ModulationStrategy *strategy);
 
-  Spectrum* get_spectrum(int offset);
+  Spectrum *get_spectrum(int offset);
 
   /**
    * Enqueue a frame of samples (length p.N) into the internal sample buffer and
@@ -110,16 +108,21 @@ public:
    */
   void demodulate();
 
-  // Set the callback that will be invoked when a waveform is ready to be transmitted.
-  // The callback receives the generated waveform (vector<float>).
+  // Set the callback that will be invoked when a waveform is ready to be
+  // transmitted. The callback receives the generated waveform (vector<float>).
   void set_tx_callback(const std::function<void(waveform)> &cb);
 
-  // Set the callback that will be invoked when a full message (bytes) is received.
+  // Set the callback that will be invoked when a full message (bytes) is
+  // received.
   void set_rx_callback(const std::function<void(std::vector<uint8_t>)> &cb);
+
+  friend std::ostream& operator<<(std::ostream& os, const SignalModulation& sm) {
+    os << sm.p << "\n" << *sm.strategy << '\n';
+    return os;
+  }
 
   ~SignalModulation();
 };
-
 
 /*
  * Create a ProtocolConfig structure
@@ -127,9 +130,11 @@ public:
  * sample_rate: audio sample rate in Hz
  * f1: 1st marker frequency (in Hz)
  * f2: 2nd marker frequency (in Hz)
- * min_strength: intensity at which there is no signal - lowest possible strength (in dB)
- * strength_threshold: intensity at which there is considered frequency as present (in dB)
+ * min_strength: intensity at which there is no signal - lowest possible
+ * strength (in dB) strength_threshold: intensity at which there is considered
+ * frequency as present (in dB)
  */
-ProtocolConfig* createProtocolConfig(int N = 2048, int sample_rate = 48000,
-                                  int f1 = 15000, int f2 = 17000,
-                                  float min_strength = -100, float strength_threshold = -45);
+ProtocolConfig *createProtocolConfig(int N = 2048, int sample_rate = 48000,
+                                     int f1 = 15000, int f2 = 17000,
+                                     float min_strength = -100,
+                                     float strength_threshold = -45);

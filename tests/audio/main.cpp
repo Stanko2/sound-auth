@@ -34,9 +34,9 @@ struct Context {
 // --- PipeWire Callbacks ---
 
 static void on_process_playback(void *userdata) {
-  Context *app = (Context *)userdata;
+  Context *ctx = (Context *)userdata;
   struct pw_buffer *b;
-  if (!(b = pw_stream_dequeue_buffer(app->playback_stream)))
+  if (!(b = pw_stream_dequeue_buffer(ctx->playback_stream)))
     return;
 
   struct spa_buffer *buf = b->buffer;
@@ -45,8 +45,8 @@ static void on_process_playback(void *userdata) {
 
   for (uint32_t i = 0; i < n_frames; i++) {
     float sample = 0.0f;
-    if (app->output_buffer && app->output_buffer->size() > 0) {
-      app->output_buffer->pop(sample);
+    if (ctx->output_buffer && ctx->output_buffer->size() > 0) {
+      ctx->output_buffer->pop(sample);
     }
     dst[i] = sample;
   }
@@ -54,15 +54,15 @@ static void on_process_playback(void *userdata) {
   buf->datas[0].chunk->offset = 0;
   buf->datas[0].chunk->size = n_frames * sizeof(float);
   buf->datas[0].chunk->stride = sizeof(float);
-  pw_stream_queue_buffer(app->playback_stream, b);
+  pw_stream_queue_buffer(ctx->playback_stream, b);
 }
 
 static void on_process_capture(void *userdata) {
-  Context *app = (Context *)userdata;
+  Context *ctx = (Context *)userdata;
   struct pw_buffer *b;
-  if (!(b = pw_stream_dequeue_buffer(app->capture_stream)))
+  if (!(b = pw_stream_dequeue_buffer(ctx->capture_stream)))
     return;
-  if (app->input_buffer == nullptr)
+  if (ctx->input_buffer == nullptr)
     return;
 
   struct spa_buffer *buf = b->buffer;
@@ -70,10 +70,10 @@ static void on_process_capture(void *userdata) {
   if (src) {
     uint32_t n_frames = buf->datas[0].chunk->size / sizeof(float);
     for (uint32_t i = 0; i < n_frames; i++) {
-      app->input_buffer->add(src[i]);
+      ctx->input_buffer->add(src[i]);
     }
   }
-  pw_stream_queue_buffer(app->capture_stream, b);
+  pw_stream_queue_buffer(ctx->capture_stream, b);
 }
 
 static void on_stream_state_changed(void *data, enum pw_stream_state old,
@@ -191,7 +191,7 @@ void run_tx_tests(Context* app) {
       while (app->output_buffer->size() > 0) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     });
     pw_main_loop_quit(app->loop);
   });
@@ -199,6 +199,26 @@ void run_tx_tests(Context* app) {
   pw_main_loop_run(app->loop);
   runner.join();
   pw_main_loop_quit(app->loop);
+}
+
+void run_rx_tests(Context* ctx) {
+  std::thread runner([&]() {
+    test_rx(ctx->s);
+    std::vector<float> frame(ctx->p.N);
+    while (ctx->running) {
+      if (ctx->input_buffer->size() >= ctx->p.N) {
+        for (int i = 0; i < ctx->p.N; i++)
+          ctx->input_buffer->pop(frame[i]);
+        ctx->s->enqueue_frame(frame);
+      } else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      }
+    }
+  });
+
+  pw_main_loop_run(ctx->loop);
+  runner.join();
+  pw_main_loop_quit(ctx->loop);
 }
 
 int main(int argc, const char *argv[]) {
@@ -216,7 +236,7 @@ int main(int argc, const char *argv[]) {
 
   app.p = *createProtocolConfig(1024);
   app.p.lowest_strength = -100;
-  app.p.strength_threshold = -45;
+  app.p.strength_threshold = -50;
 
   app.s = new SignalModulation(app.p);
   std::vector<int> freqs = {app.p.f1, app.p.f1 + 10, app.p.f2, app.p.f2 + 10};
@@ -236,6 +256,8 @@ int main(int argc, const char *argv[]) {
     sendData(app, argv[2]);
   } else if (cmd == "tx-tests") {
     run_tx_tests(&app);
+  } else if (cmd == "rx-tests") {
+    run_rx_tests(&app);
   }
 
   return 0;

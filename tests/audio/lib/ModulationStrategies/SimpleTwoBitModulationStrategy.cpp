@@ -1,4 +1,5 @@
 #include "../modulation.h"
+#include "ModulationStrategies/modulationStrategy.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -30,7 +31,8 @@ SimpleTwoBitModulationStrategy::modulate(const std::vector<bool> &data) {
   return waveformString;
 }
 
-// This is not working correctly and needs tweaking of many constants - not effective
+// This is not working correctly and needs tweaking of many constants - not
+// effective
 bool SimpleTwoBitModulationStrategy::is_present(int frame_offset, int f) {
   int start = frame_offset - 80;
   int end = frame_offset + 80;
@@ -60,7 +62,6 @@ bool SimpleTwoBitModulationStrategy::is_present(int frame_offset, int f) {
     delete s;
   }
 
-
   // ak sme pod thresholdom, frekvencia tam nie je
   if (local_max <= -40) {
     return false;
@@ -86,4 +87,9 @@ std::vector<bool> SimpleTwoBitModulationStrategy::demodulate(int offset) {
   out[1] = is_present(offset, f2);
 
   return out;
+}
+
+void SimpleTwoBitModulationStrategy::print(std::ostream &os) const {
+  os << "SimpleTwoBitModulationStrategy [f1: " << bin_to_freq(f1) << "Hz, f2: " << bin_to_freq(f2)
+     << "Hz]";
 }
