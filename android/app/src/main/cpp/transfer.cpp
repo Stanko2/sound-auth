@@ -1,4 +1,3 @@
-
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -18,15 +17,7 @@
 #include "audio.cpp"
 #include "tests/transferTest.h"
 
-struct Context {
-    Ringbuffer<float>* input_buffer;
-    Ringbuffer<float>* output_buffer;
-
-    ProtocolConfig p;
-    SignalModulation* s;
-    std::atomic<bool> running;
-
-};
+SoundTransfer* sound_transfer;
 
 std::string jstring2string(JNIEnv *env, jstring jStr) {
     if (!jStr)
@@ -52,7 +43,7 @@ JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_PlayFrequencies(JNIEnv *env, jobject thiz,
                                                                  jstring data) {
 
-    if (output_buffer == nullptr) {
+    if (sound_transfer == nullptr) {
         return;
     }
     std::string s = jstring2string(env, data);
@@ -60,39 +51,22 @@ Java_com_example_soundauth_ui_SoundTestingScreen_PlayFrequencies(JNIEnv *env, jo
     auto* w = new Waveforms(0,0, new HannWindow(1024));
     std::vector<float> output = w->getWaveform(s, 1024, 48000);
     delete w;
-    output_buffer->resize(output.size());
+//    output_buffer->resize(output.size());
 
     for(float i : output) {
-        output_buffer->add(i);
+        sound_transfer->get_output_buffer()->add(i);
     }
 }
 
-std::atomic<bool> record_loop_running = false;
-ProtocolConfig* p = nullptr;
-SignalModulation* s = nullptr;
+
 
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_CloseStreams(JNIEnv *env, jobject thiz) {
-    record_loop_running = false;
     CloseStreams();
+    sound_transfer->stop();
+    sound_transfer = nullptr;
 }
-
-void RunRecordLoop(const ProtocolConfig *p, SignalModulation* s) {
-    std::vector<float> frame(p->N);
-    while(record_loop_running) {
-        while(input_buffer->size() < p->N) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        if (!record_loop_running) break;
-        for (int i = 0; i < p->N; i++) {
-            input_buffer->pop(frame[i]);
-        }
-        s->enqueue_frame(frame);
-    }
-}
-
-
 
 extern "C"
 JNIEXPORT void JNICALL
@@ -100,24 +74,15 @@ Java_com_example_soundauth_ui_SoundTestingScreen_OpenStreams(JNIEnv *env, jobjec
     ProtocolConfig* p = createProtocolConfig(1024);
     p->lowest_strength = -125;
     p->strength_threshold = -90;
-    OpenInputStream(*p);
-    OpenOutputStream(*p);
-    input_buffer = new Ringbuffer<float>(50*p->N);
-    output_buffer = new Ringbuffer<float>(0);
+
+    std::vector<int> freqs = {p->f1, p->f1 + 5, p->f2, p->f2 + 5};
+    ModulationStrategy* strategy = new TwoTonePerBitModulationStrategy(freqs);
+    sound_transfer = new SoundTransfer(strategy, p);
+    OpenInputStream(*p, sound_transfer);
+    OpenOutputStream(*p, sound_transfer);
+    sound_transfer->run();
+
     StartStreams();
-    record_loop_running = true;
-    s = new SignalModulation(*p);
-    s->set_tx_callback([](const waveform& w) {
-        output_buffer->resize(w.size());
-        for(float i : w) {
-            output_buffer->add(i);
-        }
-    });
-    std::cout << "path: " << std::filesystem::current_path() << std::endl;
-    std::vector<int> freqs = {p->f1, p->f1 + 10, p->f2, p->f2 + 10};
-    s->set_strategy(new TwoTonePerBitModulationStrategy(freqs));
-    std::thread thread(RunRecordLoop, p, s);
-    thread.detach();
 }
 
 
@@ -125,37 +90,23 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_sendData(JNIEnv *env, jobject thiz,
                                                           jbyteArray data) {
-    if (s == nullptr) return;
-//    ProtocolConfig* p = createProtocolConfig(1024);
-//    p->peak_threshold = 0.1f;
-//    std::vector<int> freqs = {p->f1, p->f1 + 10, p->f2, p->f2 + 10};
-//    s->set_strategy(new TwoTonePerBitModulationStrategy(freqs));
+    if (sound_transfer == nullptr) return;
+
     jsize len = env->GetArrayLength(data);
     std::vector<uint8_t> msg(len);
     env->GetByteArrayRegion(data, 0, len, reinterpret_cast<jbyte*>(msg.data()));
-    std::cout << "Len: " << len << std::endl;
-    s->transmit_data(msg);
-    std::cout << "Output size: " << output_buffer->size() << std::endl;
+    sound_transfer->send(msg);
 }
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_testTx(JNIEnv *env, jobject thiz) {
-    if (s == nullptr) return;
-    std::thread runner([&](){
-        test_tx(s, [&](const waveform &w){
-            std::cout << "Message" << std::endl;
-            output_buffer->resize(w.size());
-            for(float s: w) {
-                output_buffer->add(s);
-            }
+    if (sound_transfer == nullptr) return;
+    test_tx(sound_transfer);
+}
 
-            while (output_buffer->size() > 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-        });
-
-    });
-
-    runner.join();
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_soundauth_ui_SoundTestingScreen_testRx(JNIEnv *env, jobject thiz) {
+    if (sound_transfer == nullptr) return;
+    test_rx(sound_transfer);
 }

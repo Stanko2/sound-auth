@@ -1,6 +1,8 @@
 #ifndef MODULATIONSTRATEGY_H
 #define MODULATIONSTRATEGY_H
 
+#include "waveforms.h"
+#include <cstddef>
 #include <cstdint>
 #include <ostream>
 #include <string>
@@ -29,6 +31,13 @@ public:
    */
   virtual std::vector<bool> demodulate(int frame_offset) = 0;
 
+  /*
+   * Determine if spectrum has noise in it - can we transmit using this strategy, or should we wait?
+   */
+  virtual bool has_noise(Spectrum* s) {
+    return false;
+  }
+
   friend std::ostream& operator<<(std::ostream &o, const ModulationStrategy& strategy) {
     strategy.print(o);
     return o;
@@ -55,6 +64,7 @@ public:
   SimpleTwoBitModulationStrategy(int f1, int f2);
   std::string modulate(const std::vector<bool> &data) override;
   std::vector<bool> demodulate(int frame_offset) override;
+  bool has_noise(Spectrum* s) override;
 };
 
 /*
@@ -68,9 +78,10 @@ private:
 protected:
   void print(std::ostream& os) const override;
 public:
-  TwoTonePerBitModulationStrategy(const std::vector<int> &frequencies);
+  TwoTonePerBitModulationStrategy(size_t start_frequency, uint8_t bits_per_frame, uint8_t freq_offset);
   std::string modulate(const std::vector<bool> &data) override;
   std::vector<bool> demodulate(int frame_offset) override;
+  bool has_noise(Spectrum* s) override;
 };
 
 
@@ -81,6 +92,7 @@ public:
 class MultiToneModulationStrategy : public ModulationStrategy {
   std::string modulate(const std::vector<bool> &data) override;
   std::vector<bool> demodulate(int frame_offset) override;
+  bool has_noise(Spectrum* s) override;
 protected:
   void print(std::ostream& os) const override;
 

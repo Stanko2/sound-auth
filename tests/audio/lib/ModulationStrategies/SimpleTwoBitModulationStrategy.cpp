@@ -1,5 +1,6 @@
 #include "../modulation.h"
 #include "ModulationStrategies/modulationStrategy.h"
+#include "waveforms.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -92,4 +93,8 @@ std::vector<bool> SimpleTwoBitModulationStrategy::demodulate(int offset) {
 void SimpleTwoBitModulationStrategy::print(std::ostream &os) const {
   os << "SimpleTwoBitModulationStrategy [f1: " << bin_to_freq(f1) << "Hz, f2: " << bin_to_freq(f2)
      << "Hz]";
+}
+
+bool SimpleTwoBitModulationStrategy::has_noise(Spectrum* s) {
+  return s->strength(f1) < p->strength_threshold && s->strength(f2) < p->strength_threshold;
 }

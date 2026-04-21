@@ -271,7 +271,7 @@ const float Spectrum::mag(const int f) {
 
 const float Spectrum::strength(const int f) {
   float s = 0;
-  for (int i = -2; i <= 2; i++) {
+  for (int i = -1; i <= 1; i++) {
     s += mag(f);
   }
 

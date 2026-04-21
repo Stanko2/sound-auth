@@ -13,8 +13,10 @@
 #include <fstream>
 #include <ios>
 #include <iostream>
+#include <mutex>
 #include <ostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 SignalModulation::SignalModulation(const ProtocolConfig &p) {
@@ -152,7 +154,7 @@ int SignalModulation::detect_begin() {
             << std::endl;
 
   data.close();
-  if (abs((offset_max_df1 - offset_max_df2) - 1000) < 150) {
+  if (abs((offset_max_df1 - offset_max_df2) - p.N) < 0.2 * p.N) {
     std::cout << "using max derivative synchronization" << std::endl;
     return offset_derivative;
   } else {
@@ -178,19 +180,39 @@ float SignalModulation::get_noise(Spectrum *s) {
 void SignalModulation::enqueue_frame(const std::vector<float> &samples) {
   assert(samples.size() == p.N);
   waveforms->enqueue_frame(samples);
-  // std::cout << "enqueue" << std::endl;
-  if (recorder_state == idle) {
-    int x = detect_begin();
-    if (x != -1) {
-      sync_offset = x;
-      recorder_state = processing;
-      msg_frames = 0;
-      if (false) { // TODO: pridat switch na logovanie.
-        int id = rand();
-        message_data_file.open("test-data/message" + std::to_string(id));
-        message_data_file << "f1,f2,reading" << std::endl;
+
+  if (recorder_state == transmitting) {
+    std::lock_guard<std::mutex> lock(state_mutex);
+    msg_frames --;
+    if (msg_frames == 0) {
+      recorder_state = idle;
+      state_cv.notify_all();
+    }
+  } else if (recorder_state == idle) {
+    if (to_transmit.size() > 0) {
+      Spectrum* s = get_spectrum(0);
+      if (strategy != nullptr && !strategy->has_noise(s)) {
+        tx_callback(to_transmit);
+        msg_frames = to_transmit.size() / p.N + 1;
+        to_transmit.clear();
+        recorder_state = transmitting;
+        return;
+      }
+      delete s;
+    } else {
+      int x = detect_begin();
+      if (x != -1) {
+        sync_offset = x;
+        recorder_state = processing;
+        msg_frames = 0;
+        // if (false) { // TODO: pridat switch na logovanie.
+        //   int id = rand();
+        //   message_data_file.open("test-data/message" + std::to_string(id));
+        //   message_data_file << "f1,f2,reading" << std::endl;
+        // }
       }
     }
+
   } else if (recorder_state == processing) {
     if (msg_frames < p.max_message_length) {
       demodulate();
@@ -213,29 +235,38 @@ float bin_to_freq(const ProtocolConfig *p, int bin) {
   return bin * delta;
 }
 
-waveform SignalModulation::transmit_data(std::vector<uint8_t> &data) {
+void SignalModulation::transmit_data(std::vector<uint8_t> &data) {
   assert(data.size() <= p.max_message_length);
 
-  tx_buffer.clear();
+  std::vector<bool> tx_buffer;
   for (uint8_t byte : data) {
     for (int i = 7; i >= 0; i--) {
       tx_buffer.push_back((byte & (1 << i)) > 0);
     }
   }
 
-  std::string f1 = std::to_string(bin_to_freq(&p, p.f1));
-  std::string f2 = std::to_string(bin_to_freq(&p, p.f2));
-  std::string marker = f2 + "|" + f1 + "|0|" + f2 + "|";
+  {
+    std::unique_lock<std::mutex> lock(state_mutex);
 
-  assert(strategy != nullptr);
+    state_cv.wait(lock, [this](){
+      return recorder_state == idle && to_transmit.empty();
+    });
 
-  std::string freq_string = marker + strategy->modulate(tx_buffer);
-  std::cout << "MSG string: " << freq_string << std::endl;
-  assert(tx_callback != nullptr);
-  waveform w = waveforms->getWaveform(freq_string, p.N, p.sample_rate);
+    std::string f1 = std::to_string(bin_to_freq(&p, p.f1));
+    std::string f2 = std::to_string(bin_to_freq(&p, p.f2));
+    std::string marker = f2 + "|" + f1 + "|0|" + f2 + "|";
 
-  tx_callback(w);
-  return w;
+    assert(strategy != nullptr);
+
+    std::string freq_string = marker + strategy->modulate(tx_buffer);
+    std::cout << "MSG string: " << freq_string << std::endl;
+    // assert(tx_callback != nullptr);
+    to_transmit = waveforms->getWaveform(freq_string, p.N, p.sample_rate);
+
+    state_cv.wait(lock, [this](){
+      return recorder_state == idle && to_transmit.empty();
+    });
+  }
 }
 
 unsigned char ToByte(std::vector<bool> b) {

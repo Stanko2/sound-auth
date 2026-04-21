@@ -20,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +42,10 @@ private const val TAG = "SoundTestingScreen"
 class SoundTestingScreen() {
     val logger = Logger()
 
+    fun start() {
+        logger.setup()
+    }
+
     fun String.toBitString(): String =
         this.toByteArray()
             .joinToString("") { byte ->
@@ -53,6 +58,10 @@ class SoundTestingScreen() {
 
     @Composable
     fun UI() {
+        LaunchedEffect(logger) {
+
+
+        }
 
         val context = LocalContext.current
 
@@ -130,11 +139,7 @@ class SoundTestingScreen() {
             }
 
             Text(msg.toBitString())
-            Button(onClick = {
-                testTx()
-            }) {
-                Text("Send test messages")
-            }
+            TestControls()
 
             logger.UI()
         }
@@ -149,4 +154,56 @@ class SoundTestingScreen() {
     external fun CloseStreams()
 
     external fun testTx()
+    external fun testRx()
+
+    @Composable
+    fun TestControls() {
+        // 1. Create a scope for the clicks
+        val scope = rememberCoroutineScope()
+
+        // 2. State to track if a process is running
+        var isProcessing by remember { mutableStateOf(false) }
+
+        Row {
+            Button(
+                onClick = {
+                    if (!isProcessing) {
+                        isProcessing = true
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                testTx() // Your blocking call
+                            } finally {
+                                isProcessing = false // Reset state when done
+                            }
+                        }
+                    }
+                },
+                enabled = !isProcessing // Disable button while working
+            ) {
+                Text(if (isProcessing) "Sending..." else "Send test messages")
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            Button(
+                onClick = {
+                    if (!isProcessing) {
+                        isProcessing = true
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                testRx() // Your blocking call
+                            } finally {
+                                isProcessing = false
+                            }
+                        }
+                    }
+                },
+                enabled = !isProcessing
+            ) {
+                Text(if (isProcessing) "Receiving..." else "Receive test messages")
+            }
+        }
+    }
 }
+
+

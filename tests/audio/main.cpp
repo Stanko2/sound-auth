@@ -9,7 +9,7 @@
 
 #include "ModulationStrategies/modulationStrategy.h"
 #include "RingBuffer.h"
-#include "lib/filter.h"
+#include "lib/entry.h"
 #include "lib/modulation.h"
 #include "lib/waveforms.h"
 #include "pipewire/main-loop.h"
@@ -23,12 +23,7 @@ struct Context {
   struct pw_stream *capture_stream;
   struct pw_stream *playback_stream;
 
-  Ringbuffer<float> *input_buffer;
-  Ringbuffer<float> *output_buffer;
-
-  ProtocolConfig p;
-  SignalModulation *s;
-  std::atomic<bool> running;
+  SoundTransfer* t;
 };
 
 // --- PipeWire Callbacks ---
@@ -45,8 +40,9 @@ static void on_process_playback(void *userdata) {
 
   for (uint32_t i = 0; i < n_frames; i++) {
     float sample = 0.0f;
-    if (ctx->output_buffer && ctx->output_buffer->size() > 0) {
-      ctx->output_buffer->pop(sample);
+    Ringbuffer<float>* output_buffer = ctx->t->get_output_buffer();
+    if (output_buffer && output_buffer->size() > 0) {
+      output_buffer->pop(sample);
     }
     dst[i] = sample;
   }
@@ -62,7 +58,8 @@ static void on_process_capture(void *userdata) {
   struct pw_buffer *b;
   if (!(b = pw_stream_dequeue_buffer(ctx->capture_stream)))
     return;
-  if (ctx->input_buffer == nullptr)
+  Ringbuffer<float>* input_buffer = ctx->t->get_input_buffer();
+  if (input_buffer == nullptr)
     return;
 
   struct spa_buffer *buf = b->buffer;
@@ -70,7 +67,7 @@ static void on_process_capture(void *userdata) {
   if (src) {
     uint32_t n_frames = buf->datas[0].chunk->size / sizeof(float);
     for (uint32_t i = 0; i < n_frames; i++) {
-      ctx->input_buffer->add(src[i]);
+      input_buffer->add(src[i]);
     }
   }
   pw_stream_queue_buffer(ctx->capture_stream, b);
@@ -98,7 +95,6 @@ static const struct pw_stream_events playback_events = {
 void init_pw_common(Context &app) {
   pw_init(NULL, NULL);
   app.loop = pw_main_loop_new(NULL);
-  app.running = true;
 
   struct spa_audio_info_raw info =
       SPA_AUDIO_INFO_RAW_INIT(.format = SPA_AUDIO_FORMAT_F32, .rate = 48000,
@@ -144,81 +140,9 @@ void init_pw_common(Context &app) {
                     params, 1);
 }
 
-void analyzeFrequencies(Context &app) {
-  std::thread worker([&]() {
-    std::vector<float> frame(app.p.N);
-    while (app.running) {
-      if (app.input_buffer->size() >= app.p.N) {
-        for (int i = 0; i < app.p.N; i++)
-          app.input_buffer->pop(frame[i]);
-        app.s->enqueue_frame(frame);
-      } else {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-      }
-    }
-  });
-
-  pw_main_loop_run(app.loop);
-  app.running = false;
-  worker.join();
-}
-
 void sendData(Context &app, std::string data) {
   std::vector<uint8_t> vec(data.begin(), data.end());
-  app.s->transmit_data(vec);
-
-  // Watcher thread to close when done
-  std::thread watcher([&]() {
-    while (app.output_buffer->size() > 0) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    pw_main_loop_quit(app.loop);
-  });
-
-  pw_main_loop_run(app.loop);
-  watcher.join();
-}
-
-void run_tx_tests(Context* app) {
-  std::thread runner([&]() {
-    test_tx(app->s, [&](waveform w) {
-      app->output_buffer->resize(w.size());
-      for(float s: w) {
-        app->output_buffer->add(s);
-      }
-
-      while (app->output_buffer->size() > 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      }
-      std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-    });
-    pw_main_loop_quit(app->loop);
-  });
-
-  pw_main_loop_run(app->loop);
-  runner.join();
-  pw_main_loop_quit(app->loop);
-}
-
-void run_rx_tests(Context* ctx) {
-  std::thread runner([&]() {
-    test_rx(ctx->s);
-    std::vector<float> frame(ctx->p.N);
-    while (ctx->running) {
-      if (ctx->input_buffer->size() >= ctx->p.N) {
-        for (int i = 0; i < ctx->p.N; i++)
-          ctx->input_buffer->pop(frame[i]);
-        ctx->s->enqueue_frame(frame);
-      } else {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-      }
-    }
-  });
-
-  pw_main_loop_run(ctx->loop);
-  runner.join();
-  pw_main_loop_quit(ctx->loop);
+  app.t->send(vec);
 }
 
 int main(int argc, const char *argv[]) {
@@ -228,37 +152,43 @@ int main(int argc, const char *argv[]) {
     return 1;
   }
 
-  Context app;
-  app.p.N = 1024;
-  app.p.sample_rate = 48000;
-  app.input_buffer = new Ringbuffer<float>(30 * app.p.N);
-  app.output_buffer = new Ringbuffer<float>(10 * app.p.sample_rate);
+  Context ctx;
+  ProtocolConfig p;
+  p = *createProtocolConfig(1024, 48000, 1000, 3000);
+  p.lowest_strength = -100;
+  p.strength_threshold = -50;
 
-  app.p = *createProtocolConfig(1024);
-  app.p.lowest_strength = -100;
-  app.p.strength_threshold = -50;
+  ModulationStrategy* strategy = new TwoTonePerBitModulationStrategy(p.f1, 2, 5);
 
-  app.s = new SignalModulation(app.p);
-  std::vector<int> freqs = {app.p.f1, app.p.f1 + 10, app.p.f2, app.p.f2 + 10};
-  app.s->set_strategy(new TwoTonePerBitModulationStrategy(freqs));
-  app.s->set_tx_callback([&](waveform w) {
-    app.output_buffer->resize(w.size());
-    for (float a : w)
-      app.output_buffer->add(a);
+  std::cout << strategy << std::endl;
+  ctx.t = new SoundTransfer(strategy, &p);
+
+  init_pw_common(ctx);
+
+  // std::thread loop_thread = run_main_loop(&ctx);
+  std::thread audio_thread([&ctx](){
+    std::cout << "audio-thread started" << std::endl;
+    pw_main_loop_run(ctx.loop);
   });
-
-  init_pw_common(app);
+  ctx.t->run();
 
   std::string cmd(argv[1]);
   if (cmd == "detect") {
-    analyzeFrequencies(app);
+    // analyzeFrequencies(ctx);
+    ctx.t->recv();
   } else if (cmd == "send" || cmd == "play") {
-    sendData(app, argv[2]);
+    sendData(ctx, argv[2]);
   } else if (cmd == "tx-tests") {
-    run_tx_tests(&app);
+    test_tx(ctx.t);
   } else if (cmd == "rx-tests") {
-    run_rx_tests(&app);
+    test_rx(ctx.t);
   }
+
+
+  // loop_thread.join();
+  std::cout << "quit" << std::endl;
+  // audio_thread.join();
+  pw_main_loop_quit(ctx.loop);
 
   return 0;
 }

@@ -1,14 +1,20 @@
 #include "../modulation.h"
 #include "ModulationStrategies/modulationStrategy.h"
+#include "waveforms.h"
 #include <cassert>
+#include <cstddef>
 #include <string>
 #include <vector>
 
 TwoTonePerBitModulationStrategy::TwoTonePerBitModulationStrategy(
-    const std::vector<int> &frequencies) {
-  assert(frequencies.size() % 2 == 0);
+    size_t start_frequency, uint8_t bits_per_frame, uint8_t freq_offset) {
+      frequencies.clear();
+    for (size_t i = 0; i < bits_per_frame; i++) {
+      frequencies.push_back(start_frequency + (2*i) * freq_offset);
+      frequencies.push_back(start_frequency + (2*i + 1) * freq_offset);
+    }
 
-  this->frequencies = frequencies;
+
 }
 
 std::string
@@ -60,7 +66,17 @@ std::vector<bool> TwoTonePerBitModulationStrategy::demodulate(int offset) {
 void TwoTonePerBitModulationStrategy::print(std::ostream &os) const {
   os << "TwoTonePerBitModulationStrategy [Frequencies: ";
   for (size_t i = 0; i < frequencies.size(); ++i) {
-    os << bin_to_freq(frequencies[i]) << (i == frequencies.size() - 1 ? "" : ", ");
+    os << bin_to_freq(frequencies[i])
+       << (i == frequencies.size() - 1 ? "" : ", ");
   }
   os << "]";
+}
+
+bool TwoTonePerBitModulationStrategy::has_noise(Spectrum *s) {
+  for (size_t i = 0; i < frequencies.size(); ++i) {
+    if (s->strength(frequencies[i]) > p->strength_threshold) {
+      return true;
+    }
+  }
+  return false;
 }

@@ -20,6 +20,18 @@ class Logger {
 
     private val messages = mutableStateListOf<String>()
 
+    private external fun initNativeLogging()
+
+    fun setup() {
+        initNativeLogging()
+    }
+
+    fun log(msg: String) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            messages.add(msg)
+        }
+    }
+
     @Composable
     fun UI() {
         val listState = rememberLazyListState()
@@ -53,10 +65,5 @@ class Logger {
                 Text("Clear")
             }
         }
-    }
-
-    fun log(msg: String) {
-        messages.add(msg)
-
     }
 }

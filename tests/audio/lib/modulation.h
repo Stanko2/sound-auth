@@ -1,10 +1,12 @@
 #pragma once
 
 #include <complex>
+#include <condition_variable>
 #include <cstdint>
 #include <deque>
 #include <fstream>
 #include <functional>
+#include <mutex>
 #include <vector>
 
 #include "ModulationStrategies/modulationStrategy.h"
@@ -23,11 +25,15 @@ struct ProtocolConfig {
   float strength_threshold;
   // message length in frames
   size_t max_message_length;
+
+  int output_buffer_size = 100;
+  int input_buffer_size = 30;
 };
 
 enum State {
   idle = 0,
   processing = 1,
+  transmitting = 2,
 };
 
 std::ostream &operator<<(std::ostream &os, const ProtocolConfig &config);
@@ -36,14 +42,16 @@ std::ostream &operator<<(std::ostream &os, const ProtocolConfig &config);
 
 class SignalModulation {
 private:
-  std::vector<bool> rx_buffer;
-  std::vector<bool> tx_buffer;
   State recorder_state;
-  ModulationStrategy *strategy = nullptr;
   int sync_offset;
   int msg_frames;
+  waveform to_transmit;
+
   ProtocolConfig p;
   Waveforms *waveforms;
+  ModulationStrategy *strategy = nullptr;
+
+  std::vector<bool> rx_buffer;
   std::vector<uint8_t> received_bytes;
 
   /*
@@ -59,6 +67,9 @@ private:
   std::ofstream marker_file;
   std::ofstream message_file;
   std::ofstream message_data_file;
+
+  std::mutex state_mutex;
+  std::condition_variable state_cv;
 
   /**
    * Check whether spectrum `s` has a peak at bin `i` according to protocol `p`.
@@ -100,7 +111,7 @@ public:
    * Build a transmit waveform for the contents of `tx_buffer`.
    * Returns the waveform samples to play.
    */
-  waveform transmit_data(std::vector<uint8_t> &data);
+  void transmit_data(std::vector<uint8_t> &data);
 
   /**
    * Process/demodulate received data.

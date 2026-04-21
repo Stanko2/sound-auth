@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val TAG = "MainActivity"
+
     }
 
     private sealed class Screen {
@@ -74,6 +75,9 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("NewApi")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        System.loadLibrary("soundAuth")
+        val soundTestingScreen = SoundTestingScreen()
+        soundTestingScreen.start()
 
         setContent {
             var currentScreen: Screen by remember { mutableStateOf(Screen.Main) }
@@ -92,7 +96,7 @@ class MainActivity : ComponentActivity() {
                     Box(modifier = Modifier.padding(innerPadding)) {
                         when (currentScreen) {
                             Screen.Main -> MainScreen(this@MainActivity).UI()
-                            Screen.SoundTest -> SoundTestingScreen().UI()
+                            Screen.SoundTest -> soundTestingScreen.UI()
                         }
                     }
                 }

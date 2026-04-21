@@ -1,5 +1,6 @@
 #include "transferTest.h"
 #include "../modulation.h"
+#include "entry.h"
 #include <chrono>
 #include <cstring>
 #include <fstream>
@@ -52,16 +53,8 @@ std::vector<uint8_t> gen_random_msg(int seed, int length) {
   return out;
 }
 
-void test_tx(SignalModulation *sm, const TxCallback &tx_callback, int messages,
+void test_tx(SoundTransfer *t, int messages,
              int msg_len, int base_seed) {
-
-  // Install tx callback into SignalModulation; the modulation layer expects a
-  // callback that accepts the waveform (by value). Wrap the provided callback
-  // which takes const ref.
-  sm->set_tx_callback([tx_callback](waveform w) {
-    if (tx_callback)
-      tx_callback(w);
-  });
 
   for (int i = 0; i < messages; ++i) {
     int seed = base_seed + i;
@@ -76,16 +69,15 @@ void test_tx(SignalModulation *sm, const TxCallback &tx_callback, int messages,
     }
     std::cout << oss.str() << std::dec << std::endl;
 
-    sm->transmit_data(msg);
+    t->send(msg);
 
     // std::this_thread::sleep_for(std::chrono::milliseconds(200));
   }
 }
 
-void test_rx(SignalModulation *s, int messages, int msg_len, int base_seed) {
-  struct State {
-    int counter = 0;
-  };
+void test_rx(SoundTransfer *t, int messages, int msg_len, int base_seed) {
+
+
   auto state = std::make_shared<State>();
 
   // Helper to format vector as hex string
@@ -102,48 +94,37 @@ void test_rx(SignalModulation *s, int messages, int msg_len, int base_seed) {
     return ss.str();
   };
 
-  auto report_file = std::make_shared<std::ofstream>("report.txt");
-  auto file_mutex = std::make_shared<std::mutex>();
+  std::ofstream report_file("report.txt");
 
-  if (!report_file->is_open()) {
-      std::cerr << "Failed to open report.txt" << std::endl;
-      return;
-  }
-
-  *report_file << *s;
-  *report_file << "------------------------------------------\n";
-  *report_file << "expected,received,num_errors" << std::endl;
+  // report_file << *t;
+  report_file << "------------------------------------------\n";
+  report_file << "expected,received,num_errors" << std::endl;
 
   std::cout << "Test receive started" << std::endl;
 
-  s->set_rx_callback([base_seed, msg_len, messages, state, to_hex, report_file, file_mutex,
-                      s](std::vector<uint8_t> received) {
-    int idx = state->counter;
-    if (idx >= messages) {
-      s->set_rx_callback(nullptr);
-      report_file->close();
-      return;
-    }
+  float errors = 0;
+  for (int counter = 0; counter < messages; counter++) {
+    std::vector<uint8_t> received = t->recv();
 
-    std::vector<uint8_t> expected = gen_random_msg(state->counter, msg_len);
+    std::vector<uint8_t> expected = gen_random_msg(counter, msg_len);
     int bits_diff = compare(expected, received);
+    errors += bits_diff;
 
     std::cout << "------------------------------------------" << std::endl;
-    std::cout << "RX idx: " << idx << " | Seed: " << state->counter
+    std::cout << "Seed: " << counter
               << std::endl;
     std::cout << "Errors: " << bits_diff << " bits" << std::endl;
 
     std::cout << "EXPECTED: " << to_hex(expected) << std::endl;
     std::cout << "RECEIVED: " << to_hex(received) << std::endl;
 
-    std::cout << "report file" << report_file << " " << report_file->is_open() << std::endl;
-
-    {
-      std::lock_guard<std::mutex> lock(*file_mutex);
-    *report_file << to_hex(expected, false) << "," << to_hex(received, false)
-                << "," << bits_diff << std::endl;
+    if (report_file.is_open()) {
+      report_file << to_hex(expected, false) << "," << to_hex(received, false)
+                  << "," << bits_diff << std::endl;
     }
+  }
 
-    state->counter++;
-  });
+  float total = messages * msg_len * 8;
+
+  std::cout << "Total accuracy: " << (total - errors) / total * 100 << "%" << std::endl;
 }
