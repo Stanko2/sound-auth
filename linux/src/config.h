@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <libconfig.h++>
+#include "toml/toml.hpp"
 
 #define CONFIG_NAME "sound-auth.cfg"
 
@@ -40,7 +41,7 @@ public:
     const std::vector<uint8_t> getAddress();
 private:
     std::string m_configFile;
-    Config* m_config;
+    toml::table m_config;
     void lookupStr(const char* path, std::string& output, const std::string& defaultValue) const;
     int deviceNameToId(const std::string& name, const bool isCapture) const;
 };

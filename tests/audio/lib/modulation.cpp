@@ -90,7 +90,7 @@ int SignalModulation::detect_begin() {
   std::cout << "Detected start marker" << std::endl;
   Spectrum *s = nullptr;
   Spectrum *last = nullptr;
-  const int offset_step = 3;
+  const int offset_step = 5;
   for (int offset = 0; offset < 3 * p.N; offset += offset_step) {
     s = get_spectrum(p.N + offset);
     float noise = get_noise(s);

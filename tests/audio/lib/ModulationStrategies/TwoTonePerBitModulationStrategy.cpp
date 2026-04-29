@@ -8,13 +8,11 @@
 
 TwoTonePerBitModulationStrategy::TwoTonePerBitModulationStrategy(
     size_t start_frequency, uint8_t bits_per_frame, uint8_t freq_offset) {
-      frequencies.clear();
-    for (size_t i = 0; i < bits_per_frame; i++) {
-      frequencies.push_back(start_frequency + (2*i) * freq_offset);
-      frequencies.push_back(start_frequency + (2*i + 1) * freq_offset);
-    }
-
-
+  frequencies.clear();
+  for (size_t i = 0; i < bits_per_frame; i++) {
+    frequencies.push_back(start_frequency + (2 * i) * freq_offset);
+    frequencies.push_back(start_frequency + (2 * i + 1) * freq_offset);
+  }
 }
 
 std::string

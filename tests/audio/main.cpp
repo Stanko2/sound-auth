@@ -1,5 +1,3 @@
-#include <atomic>
-#include <chrono>
 #include <iostream>
 #include <pipewire/pipewire.h>
 #include <spa/param/audio/format-utils.h>
@@ -11,7 +9,6 @@
 #include "RingBuffer.h"
 #include "lib/entry.h"
 #include "lib/modulation.h"
-#include "lib/waveforms.h"
 #include "pipewire/main-loop.h"
 #include "pipewire/properties.h"
 #include "pipewire/stream.h"
@@ -154,11 +151,11 @@ int main(int argc, const char *argv[]) {
 
   Context ctx;
   ProtocolConfig p;
-  p = *createProtocolConfig(1024, 48000, 1000, 3000);
+  p = *createProtocolConfig(1024, 48000, 6000, 8000);
   p.lowest_strength = -100;
-  p.strength_threshold = -50;
+  p.strength_threshold = -60;
 
-  ModulationStrategy* strategy = new TwoTonePerBitModulationStrategy(p.f1, 2, 5);
+  ModulationStrategy* strategy = new TwoTonePerBitModulationStrategy(p.f1, 4, 5);
 
   std::cout << strategy << std::endl;
   ctx.t = new SoundTransfer(strategy, &p);
@@ -179,9 +176,9 @@ int main(int argc, const char *argv[]) {
   } else if (cmd == "send" || cmd == "play") {
     sendData(ctx, argv[2]);
   } else if (cmd == "tx-tests") {
-    test_tx(ctx.t);
+    test_tx(ctx.t, 8, 32);
   } else if (cmd == "rx-tests") {
-    test_rx(ctx.t);
+    test_rx(ctx.t, 8, 32);
   }
 
 

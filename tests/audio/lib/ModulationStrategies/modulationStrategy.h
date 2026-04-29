@@ -89,13 +89,24 @@ public:
  * Uses 1 of multiple frequencies - determines couple of bits at once
  * by the frequency that is most predominant in spectrum region
  */
-class MultiToneModulationStrategy : public ModulationStrategy {
+class MFSKModulationStrategy : public ModulationStrategy {
+protected:
+  void print(std::ostream& os) const override;
+public:
+  /*
+   * start_freq: the first frequency
+   * freq_spacing: how close are 2 frequencies to each other
+   * M: region size - must be power of 2
+   * num_regions: how many regions to use
+   */
+  MFSKModulationStrategy(int start_freq, int freq_spacing, int M, int num_regions);
+
   std::string modulate(const std::vector<bool> &data) override;
   std::vector<bool> demodulate(int frame_offset) override;
   bool has_noise(Spectrum* s) override;
-protected:
-  void print(std::ostream& os) const override;
-
+private:
+  int M;
+  std::vector<std::vector<int>> freqs;
 };
 
 #endif // MODULATIONSTRATEGY_H

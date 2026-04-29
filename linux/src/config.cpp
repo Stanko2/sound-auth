@@ -6,36 +6,43 @@
 #include <cstdio>
 #include <iostream>
 #include <vector>
-#include <libconfig.h++>
+#include "toml/toml.hpp"
 #include <openssl/rand.h>
 #include <ostream>
-#include <sstream>
 #include <string>
 #include "util.cpp"
 
 AuthConfig::AuthConfig() {
-    m_config = new Config();
     m_configFile = "";
     for (int i = 0; i < 4; i++) {
         std::string path = CONFIG_PATHS[i] + "/" + CONFIG_NAME;
         FILE* file = fopen(path.c_str(), "r");
-        if (file) {
-            m_configFile = path.c_str();
-            m_config->read(file);
-            fclose(file);
-            break;
+        try {
+          if (file) {
+              m_configFile = path.c_str();
+              m_config = toml::parse_file(m_configFile);
+              fclose(file);
+              break;
+          }
+
+        } catch (const toml::parse_error& err) {
+              std::cerr << "Config parse error: " << err << std::endl;
         }
     }
 
     if (m_configFile.empty()) {
         std::cerr << "No config file found" << std::endl;
-        m_config = nullptr;
     }
 }
 
 void AuthConfig::saveConfig() {
-    if (!m_configFile.empty()) {
-        m_config->writeFile(m_configFile);
+    std::ofstream file(m_configFile, std::ios::out | std::ios::binary | std::ios::trunc);
+
+    if (file.is_open()) {
+        file << m_config;
+        file.close();
+    } else {
+        std::cerr << "Could not write config: " << std::endl;
     }
 }
 
@@ -118,50 +125,20 @@ AuthConfig::~AuthConfig() {
 }
 
 void AuthConfig::lookupStr(const char* path, std::string& output, const std::string& defaultValue) const {
-    if (!m_config) {
-        output = defaultValue;
-        return;
-    }
-    if (m_config->lookupValue(path, output)) {
-        return;
-    } else {
-        output = defaultValue;
-    }
-}
+    auto node = m_config.at_path(path);
 
+    output = node.value_or(defaultValue);
+}
 void AuthConfig::setSetting(const char* path, const std::string value) const {
-    if (!m_config) {
-        return;
-    }
-    Setting& setting = m_config->getRoot();
-    Setting* current = &setting;
-    std::stringstream ss(path);
-    std::vector<std::string> segments;
-    std::string s;
-    while(std::getline(ss, s, '.')) {
-        segments.push_back(s);
-    }
-    for (int i = 0; i < segments.size(); ++i) {
-        const std::string& segment = segments[i];
-        if (i == segments.size() - 1) {
-            if (current->exists(segment)) {
-                (*current)[segment] = value;
-            } else {
-                current->add(segment, Setting::TypeString) = value;
-            }
-        }
-        else {
-            if (!current->exists(segment)) {
-                current = &current->add(segment, Setting::TypeGroup);
-            } else {
-                current = &(*current)[segment];
-            }
-        }
-    }
+    auto& mutableData = const_cast<toml::table&>(m_config);
 
-    m_config->writeFile(m_configFile);
+    mutableData.insert_or_assign(path, value);
+
+    std::ofstream file(m_configFile, std::ios::out | std::ios::trunc);
+    if (file.is_open()) {
+        file << mutableData;
+    }
 }
-
 std::vector<uint8_t> AuthConfig::getSecretKey(std::string user) const {
     std::string key;
     std::string path = user + ".key";

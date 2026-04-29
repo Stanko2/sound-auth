@@ -71,12 +71,11 @@ Java_com_example_soundauth_ui_SoundTestingScreen_CloseStreams(JNIEnv *env, jobje
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_OpenStreams(JNIEnv *env, jobject thiz) {
-    ProtocolConfig* p = createProtocolConfig(1024);
-    p->lowest_strength = -125;
-    p->strength_threshold = -90;
+    ProtocolConfig* p = createProtocolConfig(1024, 48000, 6000, 8000);
+    p->lowest_strength = -110; //-125;
+    p->strength_threshold = -90; //-90;
 
-    std::vector<int> freqs = {p->f1, p->f1 + 5, p->f2, p->f2 + 5};
-    ModulationStrategy* strategy = new TwoTonePerBitModulationStrategy(freqs);
+    ModulationStrategy* strategy = new TwoTonePerBitModulationStrategy(p->f1, 4, 5);
     sound_transfer = new SoundTransfer(strategy, p);
     OpenInputStream(*p, sound_transfer);
     OpenOutputStream(*p, sound_transfer);
@@ -101,12 +100,12 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_testTx(JNIEnv *env, jobject thiz) {
     if (sound_transfer == nullptr) return;
-    test_tx(sound_transfer);
+    test_tx(sound_transfer, 8, 32);
 }
 
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_testRx(JNIEnv *env, jobject thiz) {
     if (sound_transfer == nullptr) return;
-    test_rx(sound_transfer);
+    test_rx(sound_transfer, 8, 32);
 }

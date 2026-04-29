@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.6...3.10)
 project(sound-auth)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
@@ -25,12 +25,12 @@ add_library(pam_sound_auth SHARED
     ${SOURCES}
 )
 target_include_directories(pam_sound_auth PRIVATE ${SDL2_INCLUDE_DIRS})
-target_link_libraries(pam_sound_auth PRIVATE ${SDL2_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto config++)
+target_link_libraries(pam_sound_auth PRIVATE ${SDL2_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto)
 target_compile_options(pam_sound_auth PRIVATE ${SDL2_CFLAGS_OTHER} -g)
 
 add_executable(${PROJECT_NAME} src/main.cpp ${SOURCE_DIR}/ggwave/ggwave.cpp ${SOURCE_DIR}/config.cpp)
 target_include_directories(${PROJECT_NAME} PRIVATE ${SDL2_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${SDL2_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto config++)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${SDL2_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto)
 target_compile_options(${PROJECT_NAME} PRIVATE ${SDL2_CFLAGS_OTHER} -g)
 
 install(TARGETS pam_sound_auth LIBRARY DESTINATION /lib/security)
