@@ -109,30 +109,27 @@ bool runAuth(Communication* c) {
     AuthConfig cfg = AuthConfig::instance();
     std::vector<uint8_t> challenge = get_challenge();
     std::vector<uint8_t> message;
-    bool running = true;
     std::vector<uint8_t> dest = cfg.GetPhoneAddress(getUsername());
     if (dest.data() == NULL) {
         std::cout << "You need to run 'sound-auth setup' first to generate key and transfer it to phone" << std::endl;
         return false;
     }
-
-    c->receive_callback = [&challenge, c, &running](){
-        std::vector<uint8_t> data;
-        int ret = c->get_data(const_cast<std::vector<uint8_t>&>(data));
-        challenge.erase(challenge.begin());
-        bool success = verify(data, challenge);
-
-        if (success) {
-            std::cout << "Authentication successful" << std::endl;
-            running = false;
-        } else {
-            std::cout << "Authentication failed" << std::endl;
-        }
-        c->stop();
-    };
     c->send_message(challenge, dest.data());
+    c->recv();
 
-    return !running;
+    std::vector<uint8_t> data;
+    int ret = c->get_data(const_cast<std::vector<uint8_t>&>(data));
+    challenge.erase(challenge.begin());
+    bool success = verify(data, challenge);
+
+    if (success) {
+        std::cout << "Authentication successful" << std::endl;
+    } else {
+        std::cout << "Authentication failed" << std::endl;
+    }
+    c->stop();
+
+    return success;
     // return waitUntil(3000, [&running](){
     //     return running;
     // });

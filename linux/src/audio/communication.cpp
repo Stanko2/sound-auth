@@ -5,8 +5,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <iostream>
 #include <sys/types.h>
+#include <vector>
 
 #define PROTOCOL GGWAVE_PROTOCOL_ULTRASOUND_FASTEST
 
@@ -20,24 +20,24 @@ Communication::Communication(AudioControl* audio, const uint8_t address[2]) {
     parameters.sampleRateInp = audio->getInputSampleRate();
     parameters.sampleRateOut = audio->getOutputSampleRate();
     parameters.payloadLength = -1;
-    ggWave = new GGWave(parameters);
-    protocol_id = AuthConfig::instance().getProtocol();
+    // ggWave = new GGWave(parameters);
+    // protocol_id = AuthConfig::instance().getProtocol();
 
     comm_instance = this;
     this->address[0] = address[0];
     this->address[1] = address[1];
     this->audio = audio;
 
-    audio->setRequiredBufferSize(ggWave->samplesPerFrame()*ggWave->sampleSizeInp());
-    audio->capture_callback = [](uint8_t* samples, std::size_t size){
-        comm_instance->samples_received(samples, size);
-    };
+    // audio->setRequiredBufferSize(ggWave->samplesPerFrame()*ggWave->sampleSizeInp());
+    // audio->capture_callback = [](uint8_t* samples, std::size_t size){
+    //     comm_instance->samples_received(samples, size);
+    // };
 
     received_data = std::vector<uint8_t>();
 }
 
 Communication::~Communication() {
-    delete ggWave;
+    // delete ggWave;
 }
 
 bool Communication::is_valid(GGWave::TxRxData& data) {
@@ -53,46 +53,48 @@ bool Communication::is_valid(GGWave::TxRxData& data) {
     return false;
 }
 
-void Communication::samples_received(uint8_t* samples, std::size_t sample_size)
-{
-    bool success = ggWave->decode(samples, sample_size);
-    GGWave::TxRxData message;
-    if (!success) {
-        std::cerr << "Failed to decode message" << std::endl;
-    } else{
-        int len = ggWave->rxTakeData(message);
-        if (len > 0) {
-            // std::cout << "Received message: ";
-            // for (auto byte : message) {
-            //     std::cout << std::hex << static_cast<int>(byte) << " ";
-            // }
-            // std::cout << std::dec;
-            if(!is_valid(message)) return;
-            std::cout << std::endl;
-            received_data.insert(received_data.end(), message.begin(), message.end());
-            if (receive_callback != NULL) {
-                // std::cout << "Message Accepted" << std::endl;
-                receive_callback();
-            }
-        }
-    }
-}
+// void Communication::samples_received(uint8_t* samples, std::size_t sample_size)
+// {
+    // bool success = ggWave->decode(samples, sample_size);
+    // GGWave::TxRxData message;
+    // if (!success) {
+    //     std::cerr << "Failed to decode message" << std::endl;
+    // } else{
+    //     int len = ggWave->rxTakeData(message);
+    //     if (len > 0) {
+    //         // std::cout << "Received message: ";
+    //         // for (auto byte : message) {
+    //         //     std::cout << std::hex << static_cast<int>(byte) << " ";
+    //         // }
+    //         // std::cout << std::dec;
+    //         if(!is_valid(message)) return;
+    //         std::cout << std::endl;
+    //         received_data.insert(received_data.end(), message.begin(), message.end());
+    //         if (receive_callback != NULL) {
+    //             // std::cout << "Message Accepted" << std::endl;
+    //             receive_callback();
+    //         }
+    //     }
+    // }
+// }
 
-int Communication::encode_message(std::vector<uint8_t> &message) {
+// int Communication::encode_message(std::vector<uint8_t> &message) {
 
-    ggWave->init(message.size(), (const char *) message.data(), protocol_id, 50);
-    std::size_t len = ggWave->encode();
-    assert(len > 0);
+//     // ggWave->init(message.size(), (const char *) message.data(), protocol_id, 50);
+//     // std::size_t len = ggWave->encode();
+//     // assert(len > 0);
 
-    waveform.resize(len);
-    memcpy(waveform.data(), ggWave->txWaveform(), len);
+//     // waveform.resize(len);
+//     // memcpy(waveform.data(), ggWave->txWaveform(), len);
 
-    return len;
-}
+//     // return len;
+//     transfer->send(message);
+//     return 0;
+// }
 
-std::vector<uint8_t> Communication::get_waveform() {
-    return waveform;
-}
+// std::vector<uint8_t> Communication::get_waveform() {
+//     return waveform;
+// }
 
 int Communication::get_data(std::vector<uint8_t> &out){
     out.resize(received_data.size());
@@ -115,14 +117,15 @@ int Communication::send_message(std::vector<uint8_t> &data, const uint8_t to[2],
     message[3] = myaddr[1];
     message.insert(message.end(), data.begin(), data.end());
     // std::cout << "Message: " << vectorToHexString(message) << std::endl;
-    int len = encode_message(message);
-    if (len > 0) {
-        std::vector<uint8_t> waveform = get_waveform();
-        audio->queue_audio(waveform, wait);
-        return 0;
-    }
+    // int len = encode_message(message);
+    // if (len > 0) {
+    //     std::vector<uint8_t> waveform = get_waveform();
+    //     audio->queue_audio(waveform, wait);
+    //     return 0;
+    // }
+    transfer->send(message);
 
-    return -1;
+    return 0;
 }
 
 void Communication::stop() {
@@ -132,4 +135,8 @@ void Communication::stop() {
 int Communication::send_broadcast(std::vector<uint8_t> &data, bool wait) {
     assert(data.size() > 0);
     return send_message(data, BROADCAST_ADDRESS, wait);
+}
+
+void Communication::recv() {
+     received_data = transfer->recv();
 }

@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <iostream>
 #include <vector>
+#include "pipewire/core.h"
 #include "toml/toml.hpp"
 #include <openssl/rand.h>
 #include <ostream>
@@ -70,19 +71,19 @@ int AuthConfig::getPlaybackDeviceId() const {
 }
 
 int AuthConfig::deviceNameToId(const std::string& name, const bool isCapture) const {
-    int numDevice = SDL_GetNumAudioDevices(isCapture);
-    if (numDevice <= 0) {
-        std::cerr << "Cannot find any audio devices" << SDL_GetError() << std::endl;
-        return -1;
-    }
+    // int numDevice = SDL_GetNumAudioDevices(isCapture);
+    // if (numDevice <= 0) {
+    //     std::cerr << "Cannot find any audio devices" << SDL_GetError() << std::endl;
+    //     return -1;
+    // }
 
-    for (int i = 0; i < numDevice; ++i) {
-        std::string deviceName = SDL_GetAudioDeviceName(i, isCapture);
-        if (deviceName == name) {
-            return i;
-        }
-    }
-    std::cerr << "Cannot find audio device '" << name << "'" << std::endl;
+    // for (int i = 0; i < numDevice; ++i) {
+    //     std::string deviceName = SDL_GetAudioDeviceName(i, isCapture);
+    //     if (deviceName == name) {
+    //         return i;
+    //     }
+    // }
+    // std::cerr << "Cannot find audio device '" << name << "'" << std::endl;
     return -1;
 }
 
@@ -91,7 +92,7 @@ int AuthConfig::getCaptureDeviceId() const {
     std::string device;
     lookupStr("devices.capture", device, "auto");
     if (device == "auto") {
-        return -1;
+        return PW_ID_ANY;
     }
     return deviceNameToId(device, true);
 }

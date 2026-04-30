@@ -57,36 +57,28 @@ int runSetup(Communication* c) {
     std::cout << "Message: " << vectorToHexString(setup) << std::endl;
 
     bool success = false;
-    c->receive_callback = [&success, c]() {
-        std::vector<uint8_t> v;
-        int ret = c->get_data(const_cast<std::vector<uint8_t>&>(v));
-        if (ret == 5 + DH_KEY_SIZE) {
-            success = true;
-            std::vector<uint8_t> a(2);
-            a[0] = v[2]; a[1] = v[3];
-            AuthConfig::instance().setAddress(getUsername(), a);
-            std::cout << "Setup data was transferred into phone successfully" << std::endl;
-            std::vector<uint8_t> secret = generate_shared_secret(setupKey, reinterpret_cast<uint8_t*>(v.data()) + 5);
-
-            std::cout << "Got secret: " << vectorToHexString(secret) << std::endl;
-            AuthConfig::instance().setSecretKey(getUsername(), secret);
-            c->stop();
-        } else {
-            std::cerr << "Invalid message received: " << vectorToHexString(v) << std::endl;
-        }
-
-    };
-
     c->send_broadcast(setup);
-    // bool done = waitUntil(3000, [&success]() {
-    //     return success;
-    // });
+    c->recv();
+
+    std::vector<uint8_t> v;
+    int ret = c->get_data(const_cast<std::vector<uint8_t>&>(v));
+    if (ret == 5 + DH_KEY_SIZE) {
+        success = true;
+        std::vector<uint8_t> a(2);
+        a[0] = v[2]; a[1] = v[3];
+        AuthConfig::instance().setAddress(getUsername(), a);
+        std::cout << "Setup data was transferred into phone successfully" << std::endl;
+        std::vector<uint8_t> secret = generate_shared_secret(setupKey, reinterpret_cast<uint8_t*>(v.data()) + 5);
+
+        std::cout << "Got secret: " << vectorToHexString(secret) << std::endl;
+        AuthConfig::instance().setSecretKey(getUsername(), secret);
+        c->stop();
+    } else {
+        std::cerr << "Invalid message received: " << vectorToHexString(v) << std::endl;
+    }
 
 
-    // if (!done) {
-    //     std::cerr << "Timeout waiting for setup data to be transferred into phone" << std::endl;
-    //     return -1;
-    // }
+
 
     return 0;
 }

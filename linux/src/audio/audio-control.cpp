@@ -1,300 +1,239 @@
 #include "audio-control.h"
 #include "../config.h"
-#include <SDL2/SDL_audio.h>
-#include <SDL2/SDL_error.h>
-#include <SDL2/SDL_hints.h>
-#include <SDL2/SDL_timer.h>
-#include <chrono>
+#include "pipewire/core.h"
+#include "pipewire/main-loop.h"
+#include "pipewire/pipewire.h"
+#include "pipewire/port.h"
+#include "pipewire/stream.h"
+#include "spa/param/audio/raw-utils.h"
+#include "spa/param/audio/raw.h"
+#include "spa/param/param.h"
+#include "spa/pod/builder.h"
+#include "../sound-transfer-lib/RingBuffer.h"
+#include <cstdint>
 #include <iostream>
 
-static std::atomic<bool> is_running;
-
 GGWave::SampleFormat AudioControl::getInputSampleFormat() {
-    GGWave::SampleFormat ret = GGWAVE_SAMPLE_FORMAT_UNDEFINED;
-    switch (captureSpec.format) {
-    case AUDIO_U8:
-        ret = GGWAVE_SAMPLE_FORMAT_U8;
-        break;
-    case AUDIO_S8:
-        ret = GGWAVE_SAMPLE_FORMAT_I8;
-        break;
-    case AUDIO_U16SYS:
-        ret = GGWAVE_SAMPLE_FORMAT_U16;
-        break;
-    case AUDIO_S16SYS:
-        ret = GGWAVE_SAMPLE_FORMAT_I16;
-        break;
-    case AUDIO_S32SYS:
-        ret = GGWAVE_SAMPLE_FORMAT_F32;
-        break;
-    case AUDIO_F32SYS:
-        ret = GGWAVE_SAMPLE_FORMAT_F32;
-        break;
-    }
 
-    return ret;
+  return GGWAVE_SAMPLE_FORMAT_F32;
 }
 
 GGWave::SampleFormat AudioControl::getOutputSampleFormat() {
-    GGWave::SampleFormat ret = GGWAVE_SAMPLE_FORMAT_UNDEFINED;
-    switch (playbackSpec.format) {
-    case AUDIO_U8:
-        ret = GGWAVE_SAMPLE_FORMAT_U8;
-        break;
-    case AUDIO_S8:
-        ret = GGWAVE_SAMPLE_FORMAT_I8;
-        break;
-    case AUDIO_U16SYS:
-        ret = GGWAVE_SAMPLE_FORMAT_U16;
-        break;
-    case AUDIO_S16SYS:
-        ret = GGWAVE_SAMPLE_FORMAT_I16;
-        break;
-    case AUDIO_S32SYS:
-        ret = GGWAVE_SAMPLE_FORMAT_F32;
-        break;
-    case AUDIO_F32SYS:
-        ret = GGWAVE_SAMPLE_FORMAT_F32;
-        break;
-    }
-
-    return ret;
+  return GGWAVE_SAMPLE_FORMAT_F32;
 }
 
-int AudioControl::getInputSampleRate() { return captureSpec.freq; }
+int AudioControl::getInputSampleRate() { return 48000; }
 
-int AudioControl::getOutputSampleRate() { return playbackSpec.freq; }
+int AudioControl::getOutputSampleRate() { return 48000; }
 
 void AudioControl::listAllDevices() {
-    // get playback devices
-    int nDevices = SDL_GetNumAudioDevices(0);
-    printf("Found %d playback devices:\n", nDevices);
-    for (int i = 0; i < nDevices; i++) {
-        printf("    - Playback device #%d: '%s'\n", i,
-            SDL_GetAudioDeviceName(i, SDL_FALSE));
-    }
+    //TODO
+  // get playback devices
+  // int nDevices = SDL_GetNumAudioDevices(0);
+  // printf("Found %d playback devices:\n", nDevices);
+  // for (int i = 0; i < nDevices; i++) {
+  //   printf("    - Playback device #%d: '%s'\n", i,
+  //          SDL_GetAudioDeviceName(i, SDL_FALSE));
+  // }
 
-    // get capture devices
-    nDevices = SDL_GetNumAudioDevices(1);
-    printf("Found %d capture devices:\n", nDevices);
-    for (int i = 0; i < nDevices; i++) {
-        printf("    - Capture device #%d: '%s'\n", i,
-            SDL_GetAudioDeviceName(i, SDL_TRUE));
-    }
+  // // get capture devices
+  // nDevices = SDL_GetNumAudioDevices(1);
+  // printf("Found %d capture devices:\n", nDevices);
+  // for (int i = 0; i < nDevices; i++) {
+  //   printf("    - Capture device #%d: '%s'\n", i,
+  //          SDL_GetAudioDeviceName(i, SDL_TRUE));
+  // }
 }
 
 AudioControl::AudioControl() {
-    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
-    setenv("SDL_AUDIODRIVER", "pulseaudio", 1);
-    if (SDL_Init(SDL_INIT_AUDIO) < 0) {
-        std::cerr << "Failed to initialize SDL:" << SDL_GetError() << std::endl;
-        return;
-    }
+  pw_init(NULL, NULL);
+  main_loop = pw_main_loop_new(NULL);
 
+  struct spa_audio_info_raw info =
+      SPA_AUDIO_INFO_RAW_INIT(.format = SPA_AUDIO_FORMAT_F32, .rate = 48000,
+                              .channels = 1);
 
-    init_capture(AuthConfig::instance().getCaptureDeviceId());
-    init_playback(AuthConfig::instance().getPlaybackDeviceId());
+  struct spa_pod_builder b =
+      SPA_POD_BUILDER_INIT(audio_buffer, sizeof(audio_buffer));
+  params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
+
+  init_capture(AuthConfig::instance().getCaptureDeviceId());
+  init_playback(AuthConfig::instance().getPlaybackDeviceId());
 }
 
-bool AudioControl::init_playback(int devId) {
-    SDL_zero(playbackSpec);
+bool AudioControl::init_playback(uint32_t devId = PW_ID_ANY) {
+  struct pw_properties *playback_props = pw_properties_new(NULL);
 
-    playbackSpec.freq = GGWave::kDefaultSampleRate;
-    playbackSpec.format = AUDIO_S16SYS;
-    playbackSpec.channels = 1;
-    playbackSpec.samples = 16 * 1024;
-    playbackSpec.callback = NULL;
+  playback_stream =
+      pw_stream_new_simple(pw_main_loop_get_loop(main_loop), "Playback",
+                           playback_props, &playback_events, this);
 
-    SDL_AudioSpec obtained;
-    SDL_AudioDeviceID outDevice;
+  pw_stream_connect(playback_stream, PW_DIRECTION_OUTPUT, devId,
+                    (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
+                                      PW_STREAM_FLAG_MAP_BUFFERS),
+                    params, 1);
 
-    SDL_zero(obtained);
-
-    if (devId >= 0) {
-        std::cout << "Using playback device: "
-                << SDL_GetAudioDeviceName(devId, SDL_FALSE) << std::endl;
-        outDevice = SDL_OpenAudioDevice(SDL_GetAudioDeviceName(devId, SDL_FALSE),
-                                        SDL_FALSE, &playbackSpec, &obtained, 0);
-    } else {
-        outDevice =
-            SDL_OpenAudioDevice(NULL, SDL_FALSE, &playbackSpec, &obtained, 0);
-    }
-
-    if (!outDevice) {
-        std::cerr << "Failed to open audio device " << SDL_GetError() << std::endl;
-        return false;
-    }
-
-    if (obtained.format != playbackSpec.format ||
-        obtained.channels != playbackSpec.channels ||
-        obtained.samples != playbackSpec.samples) {
-        SDL_CloseAudio();
-        std::cerr << "Requested audio format unsupported" << std::endl;
-        return false;
-    }
-
-    playbackDevice = outDevice;
-
-    // printf("Obtained spec for output device (SDL Id = %d):\n", playbackDevice);
-    // printf("    - Sample rate:       %d\n", obtained.freq);
-    // printf("    - Format:            %d (required: %d)\n", obtained.format,
-    //         playbackSpec.format);
-    // printf("    - Channels:          %d (required: %d)\n", obtained.channels,
-    //         playbackSpec.channels);
-    // printf("    - Samples per frame: %d\n", obtained.samples);
-
-    return true;
+  return true;
 }
 
-bool AudioControl::init_capture(int devId) {
-    SDL_zero(captureSpec);
+bool AudioControl::init_capture(uint32_t devId = PW_ID_ANY) {
+  struct pw_properties *capture_props = pw_properties_new(NULL);
 
-    captureSpec.freq = GGWave::kDefaultSampleRate;
-    captureSpec.format = AUDIO_F32;
-    captureSpec.channels = 1;
-    captureSpec.samples = 1024;
-    captureSpec.callback = NULL;
+  capture_stream =
+      pw_stream_new_simple(pw_main_loop_get_loop(main_loop), "Playback",
+                           capture_props, &playback_events, this);
 
-    SDL_AudioSpec obtained;
-    SDL_zero(obtained);
-    SDL_AudioDeviceID captureDevice;
+  pw_stream_connect(capture_stream, PW_DIRECTION_INPUT, devId,
+                    (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
+                                      PW_STREAM_FLAG_MAP_BUFFERS),
+                    params, 1);
 
-    if (devId >= 0) {
-        std::cout << "using capture device "
-                << SDL_GetAudioDeviceName(devId, SDL_TRUE) << std::endl;
-        captureDevice = SDL_OpenAudioDevice(SDL_GetAudioDeviceName(devId, SDL_TRUE),
-                                            SDL_TRUE, &captureSpec, &obtained, 0);
-    } else {
-        captureDevice =
-            SDL_OpenAudioDevice(NULL, SDL_TRUE, &captureSpec, &obtained, 0);
-    }
-
-    if (!captureDevice) {
-        std::cerr << "Failed to open audio capture device" << std::endl;
-        return false;
-    }
-
-    this->captureDevice = captureDevice;
-
-    // printf("Obtained spec for input device (SDL Id = %d):\n", captureDevice);
-    // printf("    - Sample rate:       %d\n", obtained.freq);
-    // printf("    - Format:            %d (required: %d)\n", obtained.format,
-    //         captureSpec.format);
-    // printf("    - Channels:          %d (required: %d)\n", obtained.channels,
-    //         captureSpec.channels);
-    // printf("    - Samples per frame: %d\n", obtained.samples);
-
-    return true;
+  return true;
 }
 
-void AudioControl::setRequiredBufferSize(size_t size) {
-    required_buffer_size = size;
-    output_buffer = malloc(500 * required_buffer_size);
+void AudioControl::queue_audio(std::vector<uint8_t> &data,
+                               bool waitForResponse) {
+
 }
 
-void AudioControl::queue_audio(std::vector<uint8_t> &data, bool waitForResponse) {
-    output_buffer_size = data.size();
-    free(output_buffer);
-    output_buffer = malloc(500 * output_buffer_size);
-    memcpy(output_buffer, data.data(), data.size());
-    float duration = (float)output_buffer_size / (float)playbackSpec.freq;
-    if (!waitForResponse){
-        start_loop((int)(duration * 1000));
-    } else {
-        start_loop();
+void AudioControl::process_input(void *data) {
+    AudioControl *ctx = (AudioControl *)data;
+    struct pw_buffer *b;
+    if (!(b = pw_stream_dequeue_buffer(ctx->capture_stream)))
+      return;
+    Ringbuffer<float> *input_buffer = ctx->input_buffer;
+    if (input_buffer == nullptr)
+      return;
+
+    struct spa_buffer *buf = b->buffer;
+    float *src = (float *)buf->datas[0].data;
+    if (src) {
+      uint32_t n_frames = buf->datas[0].chunk->size / sizeof(float);
+      for (uint32_t i = 0; i < n_frames; i++) {
+        input_buffer->add(src[i]);
+      }
     }
+    pw_stream_queue_buffer(ctx->capture_stream, b);
 }
 
-bool AudioControl::loop_step() {
-    if (!playbackDevice || !captureDevice) {
-        std::cerr << "Trying to run loop without initialization" << std::endl;
-        return false;
+void AudioControl::process_output(void *data) {
+    AudioControl *ctx = (AudioControl *)data;
+    struct pw_buffer *b;
+    if (!(b = pw_stream_dequeue_buffer(ctx->playback_stream)))
+      return;
+
+    struct spa_buffer *buf = b->buffer;
+    float *dst = (float *)buf->datas[0].data;
+    uint32_t n_frames = buf->datas[0].maxsize / sizeof(float);
+
+    for (uint32_t i = 0; i < n_frames; i++) {
+      float sample = 0.0f;
+      Ringbuffer<float> *output_buffer = ctx->output_buffer;
+      if (output_buffer && output_buffer->size() > 0) {
+        output_buffer->pop(sample);
+      }
+      dst[i] = sample;
     }
 
-    if (!required_buffer_size) {
-        std::cerr << "Trying to run without loop buffer size" << std::endl;
-        return false;
-    }
-
-    // we have some data to send
-    if (output_buffer_size > 0) {
-        float duration = (float)output_buffer_size / (float)playbackSpec.freq;
-        // std::cout << "Sending message, duration: " << duration << "s" << std::endl;
-        SDL_QueueAudio(playbackDevice, output_buffer, output_buffer_size);
-        output_buffer_size = 0;
-        output_buffer = NULL;
-    } else {
-
-    // still sending data, need to wait for it to finish
-        if (SDL_GetQueuedAudioSize(playbackDevice) > 0) {
-        SDL_ClearQueuedAudio(captureDevice);
-        SDL_Delay(10);
-
-        // no data to send, we can receive
-        } else {
-            const int nHave = (int)SDL_GetQueuedAudioSize(captureDevice);
-            const int nNeed = required_buffer_size;
-            if (nHave >= nNeed) {
-                if (capture_callback == NULL) {
-                    std::cerr << "No capture callback specified" << std::endl;
-                    return false;
-                }
-            std::vector<uint8_t> buffer(required_buffer_size);
-            SDL_DequeueAudio(captureDevice, buffer.data(), nNeed);
-            capture_callback(buffer.data(), required_buffer_size);
-            if (nHave > 32 * nNeed) {
-                std::cerr
-                    << "Warning: slow processing, clearing queued audio buffer of "
-                    << SDL_GetQueuedAudioSize(captureDevice) << " bytes";
-            SDL_ClearQueuedAudio(captureDevice);
-            }
-        }
-        SDL_Delay(10);
-        }
-    }
-
-    return true;
+    buf->datas[0].chunk->offset = 0;
+    buf->datas[0].chunk->size = n_frames * sizeof(float);
+    buf->datas[0].chunk->stride = sizeof(float);
+    pw_stream_queue_buffer(ctx->playback_stream, b);
 }
 
-void AudioControl::start_loop(int timeout) {
-    // std::cout << "Starting loop with timeout: " << timeout << std::endl;
-    is_running = true;
-    SDL_PauseAudioDevice(captureDevice, 0);
-    SDL_PauseAudioDevice(playbackDevice, 0);
-    if (timeout > 0) {
-        loop(timeout);
-        end_loop();
-    } else {
-        loop();
-    }
+// bool AudioControl::loop_step() {
+//   if (!playbackDevice || !captureDevice) {
+//     std::cerr << "Trying to run loop without initialization" << std::endl;
+//     return false;
+//   }
 
+//   if (!required_buffer_size) {
+//     std::cerr << "Trying to run without loop buffer size" << std::endl;
+//     return false;
+//   }
+
+//   // we have some data to send
+//   if (output_buffer_size > 0) {
+//     float duration = (float)output_buffer_size / (float)playbackSpec.freq;
+//     // std::cout << "Sending message, duration: " << duration << "s" <<
+//     // std::endl;
+//     SDL_QueueAudio(playbackDevice, output_buffer, output_buffer_size);
+//     output_buffer_size = 0;
+//     output_buffer = NULL;
+//   } else {
+
+//     // still sending data, need to wait for it to finish
+//     if (SDL_GetQueuedAudioSize(playbackDevice) > 0) {
+//       SDL_ClearQueuedAudio(captureDevice);
+//       SDL_Delay(10);
+
+//       // no data to send, we can receive
+//     } else {
+//       const int nHave = (int)SDL_GetQueuedAudioSize(captureDevice);
+//       const int nNeed = required_buffer_size;
+//       if (nHave >= nNeed) {
+//         if (capture_callback == NULL) {
+//           std::cerr << "No capture callback specified" << std::endl;
+//           return false;
+//         }
+//         std::vector<uint8_t> buffer(required_buffer_size);
+//         SDL_DequeueAudio(captureDevice, buffer.data(), nNeed);
+//         capture_callback(buffer.data(), required_buffer_size);
+//         if (nHave > 32 * nNeed) {
+//           std::cerr
+//               << "Warning: slow processing, clearing queued audio buffer of "
+//               << SDL_GetQueuedAudioSize(captureDevice) << " bytes";
+//           SDL_ClearQueuedAudio(captureDevice);
+//         }
+//       }
+//       SDL_Delay(10);
+//     }
+//   }
+
+//   return true;
+// }
+
+void AudioControl::start_loop() {
+  // std::cout << "Starting loop with timeout: " << timeout << std::endl;
+  std::thread audio_thread([this]() {
+    std::cout << "audio-thread started" << std::endl;
+    pw_main_loop_run(main_loop);
+  });
+  // SDL_PauseAudioDevice(captureDevice, 0);
+  // SDL_PauseAudioDevice(playbackDevice, 0);
+  // if (timeout > 0) {
+  //   loop(timeout);
+  //   end_loop();
+  // } else {
+  //   loop();
+  // }
 }
 
 void AudioControl::end_loop() {
-  is_running = false;
-  // SDL_PauseAudioDevice(captureDevice, 1);
-  // SDL_PauseAudioDevice(playbackDevice, 1);
+  if (main_loop != NULL) {
+      pw_main_loop_quit(main_loop);
+      main_loop = NULL;
+  }
 }
 
-void AudioControl::loop(int timeout) {
-    std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
-    while (is_running) {
-        long long elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-        if (elapsed > timeout && timeout > 0) {
-            std::cerr << "Timeout reached: elapsed:" << elapsed << ", timeout: " << timeout << std::endl;
-            break;
-        }
-        if (!loop_step()) {
-            break;
-        }
-    }
-}
+// void AudioControl::loop(int timeout) {
+//   std::chrono::time_point<std::chrono::steady_clock> start =
+//       std::chrono::steady_clock::now();
+//   while (is_running) {
+//     long long elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+//                             std::chrono::steady_clock::now() - start)
+//                             .count();
+//     if (elapsed > timeout && timeout > 0) {
+//       std::cerr << "Timeout reached: elapsed:" << elapsed
+//                 << ", timeout: " << timeout << std::endl;
+//       break;
+//     }
+//     if (!loop_step()) {
+//       break;
+//     }
+//   }
+// }
 
 AudioControl::~AudioControl() {
-  SDL_PauseAudioDevice(captureDevice, 1);
-  SDL_PauseAudioDevice(playbackDevice, 1);
-  SDL_CloseAudioDevice(captureDevice);
-  SDL_CloseAudioDevice(playbackDevice);
 
-  free(output_buffer);
 }
