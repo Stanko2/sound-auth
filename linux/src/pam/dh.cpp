@@ -45,7 +45,7 @@ DHKey* generate_DH_key() {
         return nullptr;
     }
 
-    size_t len;
+    size_t len = DH_KEY_SIZE;
     EVP_PKEY_get_raw_public_key(evp_key, key->public_key, &len);
     EVP_PKEY_get_raw_private_key(evp_key, key->private_key, &len);
 
@@ -70,7 +70,7 @@ std::vector<uint8_t> generate_shared_secret(const DHKey* my_key, uint8_t* other_
     EVP_PKEY_derive_init(ctx);
     EVP_PKEY_derive_set_peer(ctx, evp_other_key);
 
-    size_t secret_len;
+    size_t secret_len = DH_KEY_SIZE;
     EVP_PKEY_derive(ctx, shared_secret.data(), &secret_len);
 
     EVP_PKEY_free(evp_my_key);

@@ -47,7 +47,7 @@ DHKey* generate_DH_key() {
         return nullptr;
     }
 
-    size_t len;
+    size_t len = DH_KEY_SIZE;
     EVP_PKEY_get_raw_public_key(evp_key, key->public_key, &len);
     EVP_PKEY_get_raw_private_key(evp_key, key->private_key, &len);
 

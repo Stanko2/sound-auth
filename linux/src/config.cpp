@@ -129,17 +129,41 @@ void AuthConfig::lookupStr(const char* path, std::string& output, const std::str
     auto node = m_config.at_path(path);
 
     output = node.value_or(defaultValue);
+    std::cout << "got output for path " << path << ": " << output << std::endl;
 }
+
 void AuthConfig::setSetting(const char* path, const std::string value) const {
     auto& mutableData = const_cast<toml::table&>(m_config);
 
-    mutableData.insert_or_assign(path, value);
+    std::string pathStr(path);
+    std::vector<std::string> parts;
+    size_t start = 0, end;
+    while ((end = pathStr.find('.', start)) != std::string::npos) {
+        parts.push_back(pathStr.substr(start, end - start));
+        start = end + 1;
+    }
+    parts.push_back(pathStr.substr(start));
+
+    toml::table* current = &mutableData;
+    for (size_t i = 0; i < parts.size() - 1; ++i) {
+        const std::string& part = parts[i];
+
+        if (!(*current)[part].is_table()) {
+            current->insert_or_assign(part, toml::table{});
+        }
+        current = (*current)[part].as_table();
+    }
+
+    current->insert_or_assign(parts.back(), value);
 
     std::ofstream file(m_configFile, std::ios::out | std::ios::trunc);
     if (file.is_open()) {
         file << mutableData;
     }
 }
+
+
+
 std::vector<uint8_t> AuthConfig::getSecretKey(std::string user) const {
     std::string key;
     std::string path = user + ".key";

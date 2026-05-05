@@ -58,10 +58,12 @@ int runSetup(Communication* c) {
 
     bool success = false;
     c->send_broadcast(setup);
-    c->recv();
+
+    c->recv(5 + DH_KEY_SIZE);
 
     std::vector<uint8_t> v;
     int ret = c->get_data(const_cast<std::vector<uint8_t>&>(v));
+    std::cout << "Message: " << vectorToHexString(v) << std::endl;
     if (ret == 5 + DH_KEY_SIZE) {
         success = true;
         std::vector<uint8_t> a(2);

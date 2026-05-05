@@ -1,6 +1,6 @@
 #include "../modulation.h"
-#include "ModulationStrategies/modulationStrategy.h"
-#include "waveforms.h"
+#include "modulationStrategy.h"
+#include "../waveforms.h"
 #include <cassert>
 #include <cstddef>
 #include <string>
@@ -77,4 +77,8 @@ bool TwoTonePerBitModulationStrategy::has_noise(Spectrum *s) {
     }
   }
   return false;
+}
+
+int TwoTonePerBitModulationStrategy::bits_per_frame() {
+  return frequencies.size() / 2;
 }

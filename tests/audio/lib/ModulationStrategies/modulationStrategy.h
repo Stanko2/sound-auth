@@ -1,7 +1,7 @@
 #ifndef MODULATIONSTRATEGY_H
 #define MODULATIONSTRATEGY_H
 
-#include "waveforms.h"
+#include "../waveforms.h"
 #include <cstddef>
 #include <cstdint>
 #include <ostream>
@@ -42,6 +42,8 @@ public:
     strategy.print(o);
     return o;
   }
+
+  virtual int bits_per_frame();
 };
 
 
@@ -65,6 +67,7 @@ public:
   std::string modulate(const std::vector<bool> &data) override;
   std::vector<bool> demodulate(int frame_offset) override;
   bool has_noise(Spectrum* s) override;
+  int bits_per_frame() override;
 };
 
 /*
@@ -82,6 +85,7 @@ public:
   std::string modulate(const std::vector<bool> &data) override;
   std::vector<bool> demodulate(int frame_offset) override;
   bool has_noise(Spectrum* s) override;
+  int bits_per_frame() override;
 };
 
 
@@ -104,6 +108,7 @@ public:
   std::string modulate(const std::vector<bool> &data) override;
   std::vector<bool> demodulate(int frame_offset) override;
   bool has_noise(Spectrum* s) override;
+  int bits_per_frame() override;
 private:
   int M;
   std::vector<std::vector<int>> freqs;

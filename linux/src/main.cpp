@@ -1,6 +1,6 @@
 
-#include "audio/audio-control.cpp"
-#include "audio/communication.cpp"
+#include "audio/audio-control.h"
+#include "audio/communication.h"
 #include "pam/otp.cpp"
 #include "config.h"
 #include <csignal>
@@ -12,11 +12,6 @@
 #include "pam/setup.cpp"
 
 AudioControl* a;
-
-void stop (int signal) {
-    std::cout << "Ending" << std::endl;
-    a->end_loop();
-}
 
 void help() {
     std::cout << "sound-auth usage: sound-auth [COMMAND]" << std::endl;
@@ -31,8 +26,6 @@ int main(int argc, char** argv) {
     a = new AudioControl();
     AuthConfig config = AuthConfig::instance();
     Communication* c = new Communication(a, config.getAddress().data());
-    std::signal(SIGINT, stop);
-
 
     std::vector<unsigned char> message;
     // std::vector<unsigned char> challenge = get_challenge();

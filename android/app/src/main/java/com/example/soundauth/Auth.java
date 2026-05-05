@@ -11,6 +11,7 @@ import java.util.Set;
 public class Auth {
     private static final String TAG = "Auth";
     public static final int KEY_LENGTH = 32;
+    public static final int CHALLENGE_LENGTH = 16;
     private DeviceInfo dev;
     private byte[] publicKey;
 
@@ -32,13 +33,13 @@ public class Auth {
         return dev.secret;
     }
 
-    public byte[] handlePairRequest(MessageHandler.Message msg) {
+    public DeviceInfo handlePairRequest(MessageHandler.Message msg) {
+        dev = new DeviceInfo(msg.source);
         publicKey = generateKey();
-        Log.d(TAG, "Key: " + ListenService.bytesToHex(publicKey));
-        dev = new DeviceInfo(msg.data, msg.address);
+        Log.d(TAG,  "address: " + ListenService.bytesToHex(msg.source) + " Key: " + ListenService.bytesToHex(publicKey));
         dev.secret = getSecret(dev.publicKey);
         Log.d(TAG, "handlePairRequest: got secret: " + ListenService.bytesToHex(dev.secret));
-        return dev.secret;
+        return dev;
     }
 
     public byte[] respond(byte[] challenge) {

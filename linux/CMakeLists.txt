@@ -26,6 +26,8 @@ set(SOURCES
     ${SOURCE_DIR}/config.cpp
 )
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/sound-transfer-lib)
+
 list(APPEND SOURCES ${TRANSFER_LIB_SOURCES})
 
 
@@ -33,13 +35,13 @@ add_library(pam_sound_auth SHARED
     ${SOURCE_DIR}/pam/authenticate.cpp
     ${SOURCES}
 )
-target_include_directories(pam_sound_auth PRIVATE ${PIPEWIRE_INCLUDE_DIRS})
-target_link_libraries(pam_sound_auth PRIVATE ${PIPEWIRE_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto)
+target_include_directories(pam_sound_auth PRIVATE ${PIPEWIRE_INCLUDE_DIRS} ${FFTW3_INCLUDE_DIRS})
+target_link_libraries(pam_sound_auth PRIVATE ${PIPEWIRE_LIBRARIES} ${FFTW3_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto)
 target_compile_options(pam_sound_auth PRIVATE ${PIPEWIRE_CFLAGS_OTHER} -g)
 
-add_executable(${PROJECT_NAME} src/main.cpp ${SOURCE_DIR}/ggwave/ggwave.cpp ${SOURCE_DIR}/config.cpp)
-target_include_directories(${PROJECT_NAME} PRIVATE ${PIPEWIRE_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${PIPEWIRE_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto)
+add_executable(${PROJECT_NAME} src/main.cpp ${SOURCES})
+target_include_directories(${PROJECT_NAME} PRIVATE ${PIPEWIRE_INCLUDE_DIRS} ${FFTW3_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${PIPEWIRE_LIBRARIES} ${FFTW3_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto)
 target_compile_options(${PROJECT_NAME} PRIVATE ${PIPEWIRE_CFLAGS_OTHER} -g)
 
 install(TARGETS pam_sound_auth LIBRARY DESTINATION /lib/security)

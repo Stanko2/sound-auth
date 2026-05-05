@@ -115,9 +115,11 @@ bool runAuth(Communication* c) {
         return false;
     }
     c->send_message(challenge, dest.data());
-    c->recv();
+    // TODO: add length
+    // c->recv();
 
     std::vector<uint8_t> data;
+    c->recv(5 + SECRET_KEY_SIZE);
     int ret = c->get_data(const_cast<std::vector<uint8_t>&>(data));
     challenge.erase(challenge.begin());
     bool success = verify(data, challenge);

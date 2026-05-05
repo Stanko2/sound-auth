@@ -1,7 +1,6 @@
 #include "transferTest.h"
 #include "../modulation.h"
-#include "entry.h"
-#include <chrono>
+#include "../entry.h"
 #include <cstring>
 #include <fstream>
 #include <iomanip>
@@ -9,7 +8,6 @@
 #include <memory>
 #include <random>
 #include <sstream>
-#include <thread>
 
 // Compare two byte-messages bitwise and return number of differing bits.
 // If lengths differ, extra bytes in the longer message count as 8 differing
@@ -104,7 +102,7 @@ void test_rx(SoundTransfer *t, int messages, int msg_len, int base_seed) {
 
   float errors = 0;
   for (int counter = 0; counter < messages; counter++) {
-    std::vector<uint8_t> received = t->recv();
+    std::vector<uint8_t> received = t->recv(msg_len);
 
     std::vector<uint8_t> expected = gen_random_msg(counter, msg_len);
     int bits_diff = compare(expected, received);

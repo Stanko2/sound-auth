@@ -20,7 +20,7 @@ struct Context {
   struct pw_stream *capture_stream;
   struct pw_stream *playback_stream;
 
-  SoundTransfer* t;
+  SoundTransfer *t;
 };
 
 // --- PipeWire Callbacks ---
@@ -37,7 +37,7 @@ static void on_process_playback(void *userdata) {
 
   for (uint32_t i = 0; i < n_frames; i++) {
     float sample = 0.0f;
-    Ringbuffer<float>* output_buffer = ctx->t->get_output_buffer();
+    Ringbuffer<float> *output_buffer = ctx->t->get_output_buffer();
     if (output_buffer && output_buffer->size() > 0) {
       output_buffer->pop(sample);
     }
@@ -55,7 +55,7 @@ static void on_process_capture(void *userdata) {
   struct pw_buffer *b;
   if (!(b = pw_stream_dequeue_buffer(ctx->capture_stream)))
     return;
-  Ringbuffer<float>* input_buffer = ctx->t->get_input_buffer();
+  Ringbuffer<float> *input_buffer = ctx->t->get_input_buffer();
   if (input_buffer == nullptr)
     return;
 
@@ -102,20 +102,9 @@ void init_pw_common(Context &app) {
   const struct spa_pod *params[1];
   params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
 
-  struct pw_properties *capture_props = pw_properties_new(
-      PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY, "Capture",
-      PW_KEY_MEDIA_ROLE, "Communication", PW_KEY_NODE_NAME,
-      "sound-transfer-capture", PW_KEY_NODE_DESCRIPTION,
-      "Frequency Detector Input", "media.class", "Stream/Input/Audio", NULL);
+  struct pw_properties *capture_props = pw_properties_new(NULL);
 
-  struct pw_properties *playback_props = pw_properties_new(
-      PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY, "Playback",
-      PW_KEY_MEDIA_ROLE, "Communication", PW_KEY_NODE_NAME,
-      "sound-transfer-playback", PW_KEY_NODE_DESCRIPTION,
-      "Data Transmitter Output", "media.class", "Stream/Output/Audio", NULL);
-
-  pw_properties_set(capture_props, "target.object", "@DEFAULT_SOURCE@");
-  pw_properties_set(playback_props, "target.object", "@DEFAULT_SINK@");
+  struct pw_properties *playback_props = pw_properties_new(NULL);
 
   app.capture_stream =
       pw_stream_new_simple(pw_main_loop_get_loop(app.loop), "Capture",
@@ -132,7 +121,6 @@ void init_pw_common(Context &app) {
 
   pw_stream_connect(app.playback_stream, PW_DIRECTION_OUTPUT, PW_ID_ANY,
                     (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
-                                      PW_STREAM_FLAG_RT_PROCESS |
                                       PW_STREAM_FLAG_MAP_BUFFERS),
                     params, 1);
 }
@@ -151,11 +139,14 @@ int main(int argc, const char *argv[]) {
 
   Context ctx;
   ProtocolConfig p;
-  p = *createProtocolConfig(1024, 48000, 6000, 8000);
+  p = *createProtocolConfig(1024, 48000, 15000, 17000);
   p.lowest_strength = -100;
   p.strength_threshold = -60;
 
-  ModulationStrategy* strategy = new TwoTonePerBitModulationStrategy(p.f1, 4, 5);
+  // ModulationStrategy *strategy =
+  //     new TwoTonePerBitModulationStrategy(p.f1, 8, 5);
+
+  ModulationStrategy *strategy = new TwoTonePerBitModulationStrategy(p.f1, 4, 5);
 
   std::cout << strategy << std::endl;
   ctx.t = new SoundTransfer(strategy, &p);
@@ -163,24 +154,23 @@ int main(int argc, const char *argv[]) {
   init_pw_common(ctx);
 
   // std::thread loop_thread = run_main_loop(&ctx);
-  std::thread audio_thread([&ctx](){
+  std::thread audio_thread([&ctx]() {
     std::cout << "audio-thread started" << std::endl;
     pw_main_loop_run(ctx.loop);
   });
   ctx.t->run();
 
   std::string cmd(argv[1]);
-  if (cmd == "detect") {
+  if (cmd == "recv") {
     // analyzeFrequencies(ctx);
-    ctx.t->recv();
+    ctx.t->recv(p.max_message_length);
   } else if (cmd == "send" || cmd == "play") {
     sendData(ctx, argv[2]);
   } else if (cmd == "tx-tests") {
-    test_tx(ctx.t, 8, 32);
+    test_tx(ctx.t, 8, 64);
   } else if (cmd == "rx-tests") {
-    test_rx(ctx.t, 8, 32);
+    test_rx(ctx.t, 8, 64);
   }
-
 
   // loop_thread.join();
   std::cout << "quit" << std::endl;

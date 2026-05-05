@@ -70,38 +70,40 @@ public class ListenService extends Service {
     private void processMessage(MessageHandler.Message msg) {
         SharedPreferences x = getSharedPreferences("prefs", MODE_PRIVATE);
         PreferencesManager p = new PreferencesManager(x);
-        Log.d(TAG, "processMessage: " + new String(msg.data));
+        Log.d(TAG, "New Message - target: " + bytesToHex(msg.address) + " source: " + bytesToHex(msg.source));
+//        Log.d(TAG, "processMessage: " + new String(msg));
         var intent = new Intent();
         var addr = getAddress();
         Auth auth = new Auth(sender);
+        DeviceInfo dev = null;
         switch (msg.command) {
             case 0x01:
-                var secret = auth.handlePairRequest(msg);
+                dev = auth.handlePairRequest(msg);
                 intent.setAction("device_add");
-                intent.putExtra("device", msg.data);
-                intent.putExtra("id", msg.source);
-                intent.putExtra("secret", secret);
-                sender.enqueueMessage(auth.getPublicKey(), (byte)0x01, msg.source);
+                intent.putExtra("device", dev.json());
+//                intent.putExtra("id", msg.source);
+//                intent.putExtra("secret", dev.secret);
+                SoundTransferWrapper.Companion.getInstance().enqueueMessage(auth.getPublicKey(), (byte)0x01, msg.source);
                 break;
             case 0x02:
                 if (msg.address[0] != addr[0] || msg.address[1] != addr[1])
                     break;
-                DeviceInfo dev = null;
                 for(var d : p.getDevices()){
                     if (d.id[0] == msg.source[0] && d.id[1] == msg.source[1]){
                         dev = d;
                     }
                 }
                 auth.setDevice(dev);
-                Log.d(TAG, "Received login challenge");
                 if (dev == null) {
                     intent.setAction("error");
                     intent.putExtra("message", "Received login from unknown device");
                     break;
                 }
-                Log.d(TAG, "Chall: " + bytesToHex(msg.data));
-                var res = auth.respond(msg.data);
-                sender.enqueueMessage(res, (byte)0x02, dev.id);
+
+                var data = SoundTransferWrapper.Companion.getInstance().recv(Auth.CHALLENGE_LENGTH, false);
+                Log.d(TAG, "Received login challenge");
+                var res = auth.respond(data);
+                SoundTransferWrapper.Companion.getInstance().enqueueMessage(res, (byte)0x02, dev.id);
                 break;
             default:
                 intent.setAction("error");
@@ -126,32 +128,41 @@ public class ListenService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        initGGwave(sample_rate, bufferSize);
-        AudioManager manager = getSystemService(AudioManager.class);
-        var address = getAddress();
-        receiver = new MessageReceiver((int)sample_rate, manager, address);
-        sender = new MessageSender((int) sample_rate, manager, address);
-        receiver.setSender(sender);
-        receiver.setMsgHandler((msg)->{
-            processMessage(msg);
-            var i = new Intent("message");
-            i.putExtra("data", msg.data);
-            i.putExtra("command", msg.command);
-            i.putExtra("address", msg.address);
-            LocalBroadcastManager.getInstance(this).sendBroadcast(i);
+//        initGGwave(sample_rate, bufferSize);
+//        AudioManager manager = getSystemService(AudioManager.class);
+//        var address = getAddress();
+//        receiver = new MessageReceiver((int)sample_rate, manager, address);
+//        sender = new MessageSender((int) sample_rate, manager, address);
+//        receiver.setSender(sender);
+//        receiver.setMsgHandler((msg)->{
+//            processMessage(msg);
+//            var i = new Intent("message");
+//            i.putExtra("data", msg.data);
+//            i.putExtra("command", msg.command);
+//            i.putExtra("address", msg.address);
+//            LocalBroadcastManager.getInstance(this).sendBroadcast(i);
+//        });
+//
+//        var listenThread = new Thread(receiver);
+//        listenThread.setDaemon(true);
+//        listenThread.setName("Sound-Auth receiver thread");
+//        listenThread.start();
+//
+//        var sendThread = new Thread(sender);
+//        sendThread.setDaemon(true);
+//        sendThread.setName("Sound-Auth send thread");
+//        sendThread.start();
+
+        SoundTransferWrapper.Companion.getInstance().init(getAddress());
+
+        SoundTransferWrapper.Companion.getInstance().openStreams(1024, 15000, 17000, -100f, -80f);
+        var backgroundThread = new Thread(()-> {
+            while(true) {
+                byte[] header = SoundTransferWrapper.Companion.getInstance().recv(5, true);
+                processMessage(new MessageHandler.Message(header));
+            }
         });
-
-        var listenThread = new Thread(receiver);
-        listenThread.setDaemon(true);
-        listenThread.setName("Sound-Auth receiver thread");
-        listenThread.start();
-
-        var sendThread = new Thread(sender);
-        sendThread.setDaemon(true);
-        sendThread.setName("Sound-Auth send thread");
-        sendThread.start();
-
-
+        backgroundThread.start();
 
         if (intent.hasExtra("message")) {
             sender.enqueueMessage(Objects.requireNonNull(intent.getStringExtra("message")).getBytes(), (byte)0x00, new byte[] {0x00,0x00});
@@ -166,8 +177,8 @@ public class ListenService extends Service {
 
     @Override
     public void onDestroy() {
-        receiver.stop();
-        sender.stop();
+//        receiver.stop();
+//        sender.stop();
         Log.d(TAG, "stopService: Stopped");
         super.onDestroy();
     }

@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <cstdint>
 #include <pipewire/pipewire.h>
 #include <vector>
@@ -30,9 +31,13 @@ private:
     struct pw_stream *playback_stream;
 
     std::thread* loop_thread;
+    std::atomic<bool> is_running{false};
 public:
     static void process_output(void* data);
     static void process_input(void* data);
+
+    void setInputBuffer(Ringbuffer<float>* input_buffer);
+    void setOutputBuffer(Ringbuffer<float>* output_buffer);
 
     void listAllDevices();
     void (*capture_callback)(uint8_t* data, std::size_t data_size) = NULL;
@@ -49,11 +54,21 @@ public:
     ~AudioControl();
 };
 
+static void on_stream_state_changed(void *data, enum pw_stream_state old,
+                                    enum pw_stream_state state,
+                                    const char *error) {
+  printf("Stream state changed: %s -> %s\n", pw_stream_state_as_string(old),
+         pw_stream_state_as_string(state));
+  if (state == PW_STREAM_STATE_ERROR) {
+    fprintf(stderr, "Stream error: %s\n", error);
+  }
+}
+
 static const struct pw_stream_events capture_events = {
     .version = PW_VERSION_STREAM_EVENTS,
-    // .state_changed = on_stream_state_changed,
+    .state_changed = on_stream_state_changed,
     .process = AudioControl::process_input};
 static const struct pw_stream_events playback_events = {
     .version = PW_VERSION_STREAM_EVENTS,
-    // .state_changed = on_stream_state_changed,
+    .state_changed = on_stream_state_changed,
     .process = AudioControl::process_output};

@@ -62,7 +62,7 @@ Java_com_example_soundauth_ui_SoundTestingScreen_PlayFrequencies(JNIEnv *env, jo
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_example_soundauth_ui_SoundTestingScreen_CloseStreams(JNIEnv *env, jobject thiz) {
+Java_com_example_soundauth_SoundTransferWrapper_closeStreams(JNIEnv *env, jobject thiz) {
     CloseStreams();
     sound_transfer->stop();
     sound_transfer = nullptr;
@@ -70,11 +70,13 @@ Java_com_example_soundauth_ui_SoundTestingScreen_CloseStreams(JNIEnv *env, jobje
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_example_soundauth_ui_SoundTestingScreen_OpenStreams(JNIEnv *env, jobject thiz) {
-    ProtocolConfig* p = createProtocolConfig(1024, 48000, 6000, 8000);
-    p->lowest_strength = -110; //-125;
-    p->strength_threshold = -90; //-90;
+Java_com_example_soundauth_SoundTransferWrapper_openStreams(JNIEnv *env, jobject thiz,
+                                                            int fft_size, int marker_f1, int marker_f2, float lowest_stength, float strength_threshold) {
+    ProtocolConfig* p = createProtocolConfig(fft_size, 48000, marker_f1, marker_f2);
+    p->lowest_strength = lowest_stength; //-125;
+    p->strength_threshold = strength_threshold; //-90;
 
+//    ModulationStrategy* strategy = new MFSKModulationStrategy(p->f1, 5, 8, 2);
     ModulationStrategy* strategy = new TwoTonePerBitModulationStrategy(p->f1, 4, 5);
     sound_transfer = new SoundTransfer(strategy, p);
     OpenInputStream(*p, sound_transfer);
@@ -87,7 +89,7 @@ Java_com_example_soundauth_ui_SoundTestingScreen_OpenStreams(JNIEnv *env, jobjec
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_example_soundauth_ui_SoundTestingScreen_sendData(JNIEnv *env, jobject thiz,
+Java_com_example_soundauth_SoundTransferWrapper_send(JNIEnv *env, jobject thiz,
                                                           jbyteArray data) {
     if (sound_transfer == nullptr) return;
 
@@ -96,16 +98,30 @@ Java_com_example_soundauth_ui_SoundTestingScreen_sendData(JNIEnv *env, jobject t
     env->GetByteArrayRegion(data, 0, len, reinterpret_cast<jbyte*>(msg.data()));
     sound_transfer->send(msg);
 }
+
+
+
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_testTx(JNIEnv *env, jobject thiz) {
     if (sound_transfer == nullptr) return;
-    test_tx(sound_transfer, 8, 32);
+    test_tx(sound_transfer, 8, 64);
 }
 
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_testRx(JNIEnv *env, jobject thiz) {
     if (sound_transfer == nullptr) return;
-    test_rx(sound_transfer, 8, 32);
+    test_rx(sound_transfer, 8, 64);
+}
+extern "C"
+JNIEXPORT jbyteArray JNICALL
+Java_com_example_soundauth_SoundTransferWrapper_recv(JNIEnv *env, jobject thiz, jint len, jboolean clear) {
+    if (sound_transfer == nullptr) return nullptr;
+
+    std::vector<uint8_t> msg = sound_transfer->recv(len, (bool)clear);
+    jbyteArray ret = env->NewByteArray(msg.size());
+    env->SetByteArrayRegion(ret, 0, msg.size(), reinterpret_cast<const jbyte *>(msg.data()));
+
+    return ret;
 }

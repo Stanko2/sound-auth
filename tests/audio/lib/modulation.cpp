@@ -1,22 +1,17 @@
 #include "modulation.h"
 #include "filter.h"
 #include "waveforms.h"
-#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cmath>
-#include <complex>
-#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <fstream>
 #include <ios>
 #include <iostream>
 #include <mutex>
 #include <ostream>
 #include <string>
-#include <thread>
 #include <vector>
 
 SignalModulation::SignalModulation(const ProtocolConfig &p) {
@@ -226,6 +221,7 @@ void SignalModulation::enqueue_frame(const std::vector<float> &samples) {
         rx_callback(received_bytes);
       }
       received_bytes.clear();
+      rx_buffer.clear();
     }
   }
 }

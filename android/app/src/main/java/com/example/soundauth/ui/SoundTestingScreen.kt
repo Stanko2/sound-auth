@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.soundauth.SoundTransferWrapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -91,12 +92,12 @@ class SoundTestingScreen() {
             }
 
             isRecording = true
-            OpenStreams();
+            SoundTransferWrapper.instance.openStreams()
         }
 
         fun stopRecording() {
             isRecording = false
-            CloseStreams();
+            SoundTransferWrapper.instance.closeStreams()
         }
 
         fun startPlaying() {
@@ -132,7 +133,7 @@ class SoundTestingScreen() {
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Button(onClick = {
-                    sendData(msg.encodeToByteArray())
+                    SoundTransferWrapper.instance.send(msg.encodeToByteArray())
                 }, enabled = msg.isNotEmpty()) {
                     Text("Send Data")
                 }
@@ -145,13 +146,7 @@ class SoundTestingScreen() {
         }
     }
 
-    external fun OpenStreams()
-
     external fun PlayFrequencies(data: String)
-
-    external fun sendData(data: ByteArray)
-
-    external fun CloseStreams()
 
     external fun testTx()
     external fun testRx()

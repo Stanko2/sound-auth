@@ -1,6 +1,6 @@
 #include "../modulation.h"
-#include "ModulationStrategies/modulationStrategy.h"
-#include "waveforms.h"
+#include "./modulationStrategy.h"
+#include "../waveforms.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -97,4 +97,8 @@ void SimpleTwoBitModulationStrategy::print(std::ostream &os) const {
 
 bool SimpleTwoBitModulationStrategy::has_noise(Spectrum* s) {
   return s->strength(f1) < p->strength_threshold && s->strength(f2) < p->strength_threshold;
+}
+
+int SimpleTwoBitModulationStrategy::bits_per_frame() {
+  return 2;
 }

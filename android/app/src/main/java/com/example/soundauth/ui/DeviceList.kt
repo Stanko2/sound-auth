@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.soundauth.DeviceInfo
 import com.example.soundauth.PreferencesManager
+import org.json.JSONObject
 
 
 @Composable
@@ -56,13 +57,8 @@ fun DeviceListScreen(
     DisposableEffect(Unit) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
-                val data = intent.getByteArrayExtra("device")!!
-                val secret = intent.getByteArrayExtra("secret")
-                val addr = intent.getByteArrayExtra("id")!!
-
-                val dev = DeviceInfo(data, addr).apply {
-                    this.secret = secret
-                }
+                val data = JSONObject(intent.getStringExtra("device")!!)
+                val dev = DeviceInfo(data)
                 addDevice(dev)
             }
         }
@@ -82,11 +78,11 @@ fun DeviceListScreen(
         } else {
             LazyColumn {
                 items(devices) { device ->
-                    Row(
+                    Column(
                         Modifier
                             .fillMaxWidth()
                             .padding(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+//                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(device.name)
                         Button(onClick = { removeDevice(device) }) {

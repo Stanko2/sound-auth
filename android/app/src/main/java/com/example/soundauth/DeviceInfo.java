@@ -2,6 +2,7 @@ package com.example.soundauth;
 
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.json.JSONException;
@@ -24,14 +25,17 @@ public class DeviceInfo {
         this.name = json.getString("name");
     }
 
-    public DeviceInfo(byte[] data, byte[] address) {
+    public DeviceInfo(byte[] address) {
 //        Log.d("", "DeviceInfo: " + new String(data));
         this.id = new byte[] {address[0], address[1]};
-        var s = new String(data);
-        this.name = s.split(":")[0];
-        var idx = s.indexOf(':') + 1;
-        publicKey = new byte[Auth.KEY_LENGTH];
-        System.arraycopy(data, idx, publicKey, 0, Auth.KEY_LENGTH);
+        StringBuilder s = new StringBuilder();
+        byte x = 0;
+        while (x != ':') {
+            x = SoundTransferWrapper.Companion.getInstance().recv(1, false)[0];
+            s.append((char) x);
+        }
+        this.name = s.toString();
+        publicKey = SoundTransferWrapper.Companion.getInstance().recv(Auth.KEY_LENGTH, false);
         Log.d("", "New device:" + this);
     }
 
@@ -52,6 +56,7 @@ public class DeviceInfo {
         return json.toString();
     }
 
+    @NonNull
     @Override
     public String toString() {
         var r = "DeviceInfo{" +

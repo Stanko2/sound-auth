@@ -4,12 +4,15 @@
 #include "modulation.h"
 #include <atomic>
 #include <cstdint>
+#include <queue>
 #include <thread>
+#include <vector>
 
 class SoundTransfer {
 private:
   SignalModulation* sm;
   ProtocolConfig* p;
+  ModulationStrategy* strategy;
   Ringbuffer<float>* input_buffer;
   Ringbuffer<float>* output_buffer;
   std::atomic<bool> is_running;
@@ -18,6 +21,7 @@ private:
 
   std::mutex recv_mutex;
   std::condition_variable recv_cv;
+  std::queue<uint8_t> data_buffer;
 
 public:
   SoundTransfer(ModulationStrategy* strategy, ProtocolConfig* p);
@@ -32,6 +36,6 @@ public:
   void run();
   void stop();
   void send(std::vector<uint8_t> msg);
-  std::vector<uint8_t> recv();
+  std::vector<uint8_t> recv(size_t length, bool clear = true);
   ~SoundTransfer();
 };
