@@ -40,7 +40,6 @@ SoundTransfer::SoundTransfer(ModulationStrategy* strategy, ProtocolConfig* p) {
 void SoundTransfer::run() {
   is_running = true;
   transfer_thread = std::thread([this](){
-    std::cout << "running " << p->N << std::endl;
     std::vector<float> frame(p->N);
     while (is_running) {
       while (input_buffer->size() < p->N) {

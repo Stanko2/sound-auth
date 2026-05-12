@@ -3,7 +3,6 @@
 #include "audio/communication.h"
 #include "pam/otp.cpp"
 #include "config.h"
-#include <csignal>
 #include <cstdint>
 #include <fstream>
 #include <iostream>

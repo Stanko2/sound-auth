@@ -31,17 +31,20 @@ public:
     ~AuthConfig();
     ggwave_ProtocolId getProtocol() const;
     void saveConfig();
-    int getPlaybackDeviceId() const;
-    int getCaptureDeviceId() const;
+    std::string getPlaybackDeviceName() const;
+    std::string getCaptureDeviceName() const;
     std::vector<uint8_t> getSecretKey(std::string user) const;
     void setSecretKey(std::string user, const std::vector<uint8_t>& key) const;
     void setAddress(std::string user, const std::vector<uint8_t>& address) const;
     void setSetting(const char* path, const std::string value) const;
     std::vector<uint8_t> GetPhoneAddress(std::string user) const;
     const std::vector<uint8_t> getAddress();
+    toml::table getConfig() {
+      return m_config;
+    }
 private:
     std::string m_configFile;
     toml::table m_config;
-    void lookupStr(const char* path, std::string& output, const std::string& defaultValue) const;
     int deviceNameToId(const std::string& name, const bool isCapture) const;
+    void lookupStr(const char* path, std::string& output, const std::string& defaultValue) const;
 };

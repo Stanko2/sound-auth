@@ -5,56 +5,81 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <string>
 #include <sys/types.h>
 #include <vector>
-
-#define PROTOCOL GGWAVE_PROTOCOL_ULTRASOUND_FASTEST
 
 Communication *comm_instance = NULL;
 
 Communication::Communication(AudioControl *audio, const uint8_t address[2]) {
-  // ggwave_setLogFile(NULL);
-  // ggwave_Parameters parameters = ggwave_getDefaultParameters();
-  // parameters.sampleFormatInp = audio->getInputSampleFormat();
-  // parameters.sampleFormatOut = audio->getOutputSampleFormat();
-  // parameters.sampleRateInp = audio->getInputSampleRate();
-  // parameters.sampleRateOut = audio->getOutputSampleRate();
-  // parameters.payloadLength = -1;
-  // ggWave = new GGWave(parameters);
-  // protocol_id = AuthConfig::instance().getProtocol();
-
   comm_instance = this;
   this->address[0] = address[0];
   this->address[1] = address[1];
   this->audio = audio;
 
-  // audio->setRequiredBufferSize(ggWave->samplesPerFrame()*ggWave->sampleSizeInp());
-  // audio->capture_callback = [](uint8_t* samples, std::size_t size){
-  //     comm_instance->samples_received(samples, size);
-  // };
-
   init_transfer();
   received_data = std::vector<uint8_t>();
 }
 
-Communication::~Communication() {
-  // delete ggWave;
-  delete transfer;
-}
+Communication::~Communication() { delete transfer; }
 
 void Communication::init_transfer() {
-  p = *createProtocolConfig(1024, 48000, 15000, 17000);
-  p.lowest_strength = -100;
-  p.strength_threshold = -60;
+  auto config = AuthConfig::instance().getConfig();
+  auto protocolConfig = config["Protocol"].is_table()
+                            ? *config["Protocol"].as_table()
+                            : toml::table{};
+  auto modulationConfig = config["Modulation"].is_table()
+                              ? *config["Modulation"].as_table()
+                              : toml::table{};
 
-  ModulationStrategy *strategy =
-      new TwoTonePerBitModulationStrategy(p.f1, 4, 5);
+  int fftSize = protocolConfig["fftSize"].value_or(1024);
+  float markerF1 =
+      protocolConfig["markerF1"].value_or(15000);
+  float markerF2 =
+      protocolConfig["markerF2"].value_or(17000);
+
+  float lowest_trength;
+
+  p = *createProtocolConfig(fftSize, 48000, markerF1, markerF2);
+  p.lowest_strength =
+      protocolConfig["lowestStrength"].value_or(-100);
+  p.strength_threshold =
+      protocolConfig["strengthThreshold"].value_or(-60);
+
+  std::string modulationType =
+      modulationConfig["type"].value_or("2tone");
+
+  ModulationStrategy *strategy;
+
+  if (modulationType == "2tone") {
+    int start = modulationConfig["startFrequency"].value_or(p.f1);
+    int spacing = modulationConfig["spacing"].value_or(5);
+    int bitsPerFrame =
+        modulationConfig["bitsPerFrame"].value_or(4);
+    strategy = new TwoTonePerBitModulationStrategy(p.f1, bitsPerFrame, spacing);
+  } else if (modulationType == "MFSK") {
+    int start = modulationConfig["startFrequency"].value_or(p.f1);
+    int spacing = modulationConfig["spacing"].value_or(5);
+    int regionSize = modulationConfig["regionSize"].value_or(4);
+    int numRegions = modulationConfig["numRegions"].value_or(2);
+
+    strategy =
+        new MFSKModulationStrategy(start, spacing, regionSize, numRegions);
+  } else if (modulationType == "simple") {
+    int f1 = modulationConfig["f1"].value_or(p.f1);
+    int f2 = modulationConfig["f2"].value_or(p.f2);
+    strategy = new SimpleTwoBitModulationStrategy(f1, f2);
+  } else {
+    std::cerr << "Unknown modulation type" << std::endl;
+    return;
+  }
 
   transfer = new SoundTransfer(strategy, &p);
 
   audio->setInputBuffer(transfer->get_input_buffer());
   audio->setOutputBuffer(transfer->get_output_buffer());
   audio->start_loop();
+  audio->openStreams();
   transfer->run();
 }
 
@@ -71,51 +96,6 @@ bool Communication::is_valid(std::vector<uint8_t> &data) {
   return false;
 }
 
-// void Communication::samples_received(uint8_t* samples, std::size_t
-// sample_size)
-// {
-// bool success = ggWave->decode(samples, sample_size);
-// GGWave::TxRxData message;
-// if (!success) {
-//     std::cerr << "Failed to decode message" << std::endl;
-// } else{
-//     int len = ggWave->rxTakeData(message);
-//     if (len > 0) {
-//         // std::cout << "Received message: ";
-//         // for (auto byte : message) {
-//         //     std::cout << std::hex << static_cast<int>(byte) << " ";
-//         // }
-//         // std::cout << std::dec;
-//         if(!is_valid(message)) return;
-//         std::cout << std::endl;
-//         received_data.insert(received_data.end(), message.begin(),
-//         message.end()); if (receive_callback != NULL) {
-//             // std::cout << "Message Accepted" << std::endl;
-//             receive_callback();
-//         }
-//     }
-// }
-// }
-
-// int Communication::encode_message(std::vector<uint8_t> &message) {
-
-//     // ggWave->init(message.size(), (const char *) message.data(),
-//     protocol_id, 50);
-//     // std::size_t len = ggWave->encode();
-//     // assert(len > 0);
-
-//     // waveform.resize(len);
-//     // memcpy(waveform.data(), ggWave->txWaveform(), len);
-
-//     // return len;
-//     transfer->send(message);
-//     return 0;
-// }
-
-// std::vector<uint8_t> Communication::get_waveform() {
-//     return waveform;
-// }
-
 int Communication::get_data(std::vector<uint8_t> &out) {
   out.resize(received_data.size());
   for (std::size_t i = 0; i < received_data.size(); i++) {
@@ -126,7 +106,8 @@ int Communication::get_data(std::vector<uint8_t> &out) {
   return out.size();
 }
 
-int Communication::send_message(std::vector<uint8_t> &data, const uint8_t to[2]) {
+int Communication::send_message(std::vector<uint8_t> &data,
+                                const uint8_t to[2]) {
   assert(data.size() > 0);
   std::vector<uint8_t> message(4);
   std::vector<uint8_t> myaddr = AuthConfig::instance().getAddress();
@@ -161,7 +142,8 @@ void Communication::recv(int len) {
       std::cerr << "Valid, returning" << std::endl;
       break;
     } else {
-      std::cerr << "Invalid message to " << std::hex << a[0] << a[1] << " from: " << a[2] << a[3] << std::endl;
+      std::cerr << "Invalid message to " << std::hex << a[0] << a[1]
+                << " from: " << a[2] << a[3] << std::endl;
     }
   }
 

@@ -146,7 +146,7 @@ int main(int argc, const char *argv[]) {
   // ModulationStrategy *strategy =
   //     new TwoTonePerBitModulationStrategy(p.f1, 8, 5);
 
-  ModulationStrategy *strategy = new TwoTonePerBitModulationStrategy(p.f1, 4, 5);
+  ModulationStrategy *strategy = new TwoTonePerBitModulationStrategy(p.f1, 2, 5);
 
   std::cout << strategy << std::endl;
   ctx.t = new SoundTransfer(strategy, &p);
@@ -155,7 +155,7 @@ int main(int argc, const char *argv[]) {
 
   // std::thread loop_thread = run_main_loop(&ctx);
   std::thread audio_thread([&ctx]() {
-    std::cout << "audio-thread started" << std::endl;
+    // std::cout << "audio-thread started" << std::endl;
     pw_main_loop_run(ctx.loop);
   });
   ctx.t->run();

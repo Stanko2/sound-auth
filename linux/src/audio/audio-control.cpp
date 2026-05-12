@@ -1,7 +1,10 @@
 #include "audio-control.h"
 #include "../config.h"
 #include "../sound-transfer-lib/RingBuffer.h"
+#include "pipewire/context.h"
 #include "pipewire/core.h"
+#include "pipewire/keys.h"
+#include "pipewire/loop.h"
 #include "pipewire/main-loop.h"
 #include "pipewire/pipewire.h"
 #include "pipewire/port.h"
@@ -11,6 +14,7 @@
 #include "spa/param/audio/raw.h"
 #include "spa/param/param.h"
 #include "spa/pod/builder.h"
+#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <thread>
@@ -29,27 +33,27 @@ int AudioControl::getInputSampleRate() { return 48000; }
 int AudioControl::getOutputSampleRate() { return 48000; }
 
 void AudioControl::listAllDevices() {
-  // TODO
-  // get playback devices
-  // int nDevices = SDL_GetNumAudioDevices(0);
-  // printf("Found %d playback devices:\n", nDevices);
-  // for (int i = 0; i < nDevices; i++) {
-  //   printf("    - Playback device #%d: '%s'\n", i,
-  //          SDL_GetAudioDeviceName(i, SDL_FALSE));
-  // }
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  std::cout << "[Playback devices]" << std::endl;
+  for (auto &x : playback_devices) {
+    std::cout << " - " << x.first << std::endl;
+  }
 
-  // // get capture devices
-  // nDevices = SDL_GetNumAudioDevices(1);
-  // printf("Found %d capture devices:\n", nDevices);
-  // for (int i = 0; i < nDevices; i++) {
-  //   printf("    - Capture device #%d: '%s'\n", i,
-  //          SDL_GetAudioDeviceName(i, SDL_TRUE));
-  // }
+  std::cout << "[Capture devices]" << std::endl;
+  for (auto &x : capture_devices) {
+    std::cout << " - " << x.first << std::endl;
+  }
 }
 
 AudioControl::AudioControl() {
   pw_init(NULL, NULL);
-  main_loop = pw_main_loop_new(NULL);
+  main_loop = pw_main_loop_new(nullptr);
+
+  context = pw_context_new(pw_main_loop_get_loop(main_loop), nullptr, 0);
+
+  core = pw_context_connect(context, nullptr, 0);
+
+  registry = pw_core_get_registry(core, PW_VERSION_REGISTRY, 0);
 
   struct spa_audio_info_raw info =
       SPA_AUDIO_INFO_RAW_INIT(.format = SPA_AUDIO_FORMAT_F32, .rate = 48000,
@@ -64,8 +68,72 @@ AudioControl::AudioControl() {
     return;
   }
 
-  init_capture(PW_ID_ANY);
-  init_playback(PW_ID_ANY);
+  pw_registry_add_listener(registry, &registry_listener, &registry_events,
+                           this);
+}
+
+void AudioControl::openStreams() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    std::string playback_name =
+        AuthConfig::instance().getPlaybackDeviceName();
+
+    std::string capture_name =
+        AuthConfig::instance().getCaptureDeviceName();
+
+    uint32_t playback_id = PW_ID_ANY;
+    uint32_t capture_id = PW_ID_ANY;
+
+    if (playback_name != "auto") {
+        if (!playback_devices.count(playback_name)) {
+            std::cerr << "Unknown playback device\n";
+            return;
+        }
+
+        playback_id = playback_devices[playback_name];
+    }
+
+    if (capture_name != "auto") {
+        if (!capture_devices.count(capture_name)) {
+            std::cerr << "Unknown capture device\n";
+            return;
+        }
+
+        capture_id = capture_devices[capture_name];
+    }
+
+    auto *payload = new StreamInitData{
+        this,
+        capture_id,
+        playback_id
+    };
+
+    pw_loop_invoke(
+        pw_main_loop_get_loop(main_loop),
+
+        [](spa_loop *loop,
+           bool async,
+           uint32_t seq,
+           const void *data,
+           size_t size,
+           void *user_data) -> int {
+
+            auto *p = static_cast<const StreamInitData *>(data);
+
+            p->ctx->init_capture(p->capture_id);
+            p->ctx->init_playback(p->playback_id);
+
+            // delete p;
+
+            return 0;
+        },
+
+        0,
+        payload,
+        sizeof(StreamInitData),
+        false,
+        nullptr
+    );
 }
 
 bool AudioControl::init_playback(uint32_t devId = PW_ID_ANY) {
@@ -116,11 +184,10 @@ bool AudioControl::init_capture(uint32_t devId = PW_ID_ANY) {
     return false;
   }
 
-
   int res = pw_stream_connect(capture_stream, PW_DIRECTION_INPUT, devId,
-                    (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
-                                      PW_STREAM_FLAG_MAP_BUFFERS),
-                    params, 1);
+                              (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
+                                                PW_STREAM_FLAG_MAP_BUFFERS),
+                              params, 1);
 
   if (res < 0) {
     std::cerr << "Failed to connect capture stream " << res << std::endl;
@@ -166,14 +233,13 @@ void AudioControl::process_output(void *data) {
   uint32_t n_frames = buf->datas[0].maxsize / sizeof(float);
   Ringbuffer<float> *output_buffer = ctx->output_buffer;
 
-  if(output_buffer == nullptr) {
+  if (output_buffer == nullptr) {
     std::cerr << "No output_buffer set" << std::endl;
     return;
   }
 
   for (uint32_t i = 0; i < n_frames; i++) {
     float sample = 0.0f;
-
 
     if (output_buffer->size() > 0) {
       output_buffer->pop(sample);
@@ -195,82 +261,22 @@ void AudioControl::setOutputBuffer(Ringbuffer<float> *output_buffer) {
   this->output_buffer = output_buffer;
 }
 
-// bool AudioControl::loop_step() {
-//   if (!playbackDevice || !captureDevice) {
-//     std::cerr << "Trying to run loop without initialization" << std::endl;
-//     return false;
-//   }
-
-//   if (!required_buffer_size) {
-//     std::cerr << "Trying to run without loop buffer size" << std::endl;
-//     return false;
-//   }
-
-//   // we have some data to send
-//   if (output_buffer_size > 0) {
-//     float duration = (float)output_buffer_size / (float)playbackSpec.freq;
-//     // std::cout << "Sending message, duration: " << duration << "s" <<
-//     // std::endl;
-//     SDL_QueueAudio(playbackDevice, output_buffer, output_buffer_size);
-//     output_buffer_size = 0;
-//     output_buffer = NULL;
-//   } else {
-
-//     // still sending data, need to wait for it to finish
-//     if (SDL_GetQueuedAudioSize(playbackDevice) > 0) {
-//       SDL_ClearQueuedAudio(captureDevice);
-//       SDL_Delay(10);
-
-//       // no data to send, we can receive
-//     } else {
-//       const int nHave = (int)SDL_GetQueuedAudioSize(captureDevice);
-//       const int nNeed = required_buffer_size;
-//       if (nHave >= nNeed) {
-//         if (capture_callback == NULL) {
-//           std::cerr << "No capture callback specified" << std::endl;
-//           return false;
-//         }
-//         std::vector<uint8_t> buffer(required_buffer_size);
-//         SDL_DequeueAudio(captureDevice, buffer.data(), nNeed);
-//         capture_callback(buffer.data(), required_buffer_size);
-//         if (nHave > 32 * nNeed) {
-//           std::cerr
-//               << "Warning: slow processing, clearing queued audio buffer of "
-//               << SDL_GetQueuedAudioSize(captureDevice) << " bytes";
-//           SDL_ClearQueuedAudio(captureDevice);
-//         }
-//       }
-//       SDL_Delay(10);
-//     }
-//   }
-
-//   return true;
-// }
-
 void AudioControl::start_loop() {
-  if (!main_loop || is_running) return;
+  if (!main_loop || is_running)
+    return;
 
   is_running = true;
-  loop_thread = new std::thread([this]() {
-    pw_main_loop_run(main_loop);
-  });
-  // SDL_PauseAudioDevice(captureDevice, 0);
-  // SDL_PauseAudioDevice(playbackDevice, 0);
-  // if (timeout > 0) {
-  //   loop(timeout);
-  //   end_loop();
-  // } else {
-  //   loop();
-  // }
+  loop_thread = new std::thread([this]() { pw_main_loop_run(main_loop); });
 }
 
 void AudioControl::end_loop() {
-  if (!main_loop || !is_running) return;
+  if (!main_loop || !is_running)
+    return;
 
   is_running = false;
   pw_main_loop_quit(main_loop);
 
-  if(loop_thread && loop_thread->joinable()) {
+  if (loop_thread && loop_thread->joinable()) {
     loop_thread->join();
   }
 
@@ -278,39 +284,58 @@ void AudioControl::end_loop() {
   loop_thread = nullptr;
 }
 
-// void AudioControl::loop(int timeout) {
-//   std::chrono::time_point<std::chrono::steady_clock> start =
-//       std::chrono::steady_clock::now();
-//   while (is_running) {
-//     long long elapsed =
-//     std::chrono::duration_cast<std::chrono::milliseconds>(
-//                             std::chrono::steady_clock::now() - start)
-//                             .count();
-//     if (elapsed > timeout && timeout > 0) {
-//       std::cerr << "Timeout reached: elapsed:" << elapsed
-//                 << ", timeout: " << timeout << std::endl;
-//       break;
-//     }
-//     if (!loop_step()) {
-//       break;
-//     }
-//   }
-// }
-
 AudioControl::~AudioControl() {
   end_loop();
 
-  if (playback_stream) {
+  if (registry) {
+    spa_hook_remove(&registry_listener);
+    pw_proxy_destroy((pw_proxy *)registry);
+  }
+
+  if (playback_stream)
     pw_stream_destroy(playback_stream);
-  }
 
-  if (capture_stream) {
+  if (capture_stream)
     pw_stream_destroy(capture_stream);
-  }
 
-  if (main_loop) {
+  if (core)
+    pw_core_disconnect(core);
+
+  if (context)
+    pw_context_destroy(context);
+
+  if (main_loop)
     pw_main_loop_destroy(main_loop);
-  }
 
   pw_deinit();
+}
+
+void AudioControl::registry_event(void *data, uint32_t id, uint32_t permissions,
+                                  const char *type, uint32_t version,
+                                  const struct spa_dict *props) {
+
+  if (strcmp(type, PW_TYPE_INTERFACE_Node) != 0)
+    return;
+
+  AudioControl *a = (AudioControl *)data;
+  const char *media_class = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
+
+  const char *node_name = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION);
+
+  if (!media_class || !node_name)
+    return;
+
+  if (strcmp(media_class, "Audio/Sink") == 0) {
+    a->playback_devices.insert({node_name, id});
+    std::cout << "New playback device" << std::endl;
+    // std::cout << "[Playback] ";
+  } else if (strcmp(media_class, "Audio/Source") == 0) {
+    a->capture_devices.insert({node_name, id});
+    std::cout << "New capture device" << std::endl;
+    // std::cout << "[Capture] ";
+  } else {
+    return;
+  }
+
+  // std::cout << "ID=" << id << " Name=" << node_name << std::endl;
 }

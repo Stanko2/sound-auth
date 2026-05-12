@@ -16,16 +16,14 @@
 
 SignalModulation::SignalModulation(const ProtocolConfig &p) {
   this->p = p;
-  std::cout << "lowest strength: " << p.lowest_strength
-            << "dB threshold: " << p.strength_threshold << "dB\n";
   recorder_state = idle;
   waveforms = new Waveforms(10 * p.N, p.N, new GaussianWindow(p.N, 4.5));
   waveforms->addFilter((Filter *)new CombFilter(p.sample_rate, 200, 0));
   marker_file.open("test-data/marker", std::ios_base::app | std::ios::out);
   message_file.open("test-data/message", std::ios_base::app | std::ios::out);
   if (!message_file.is_open()) {
-    std::cerr << "Failed to open message log file. Please create directory "
-                 "'test-data'\n";
+    // std::cerr << "Failed to open message log file. Please create directory "
+    //              "'test-data'\n";
   }
 }
 
@@ -44,9 +42,9 @@ int SignalModulation::detect_begin() {
   // float max_mag = 0;
   // float min_mag = 0;
   const auto sync_begin = std::chrono::high_resolution_clock::now();
-  Spectrum *s0 = get_spectrum(1 * p.N);
-  Spectrum *s1 = get_spectrum(2 * p.N);
-  Spectrum *s2 = get_spectrum(3 * p.N);
+  Spectrum *s0 = get_spectrum(2 * p.N);
+  Spectrum *s1 = get_spectrum(3 * p.N);
+  Spectrum *s2 = get_spectrum(4 * p.N);
 
   if (s0->strength(p.f2) > p.strength_threshold) {
     return -1;
@@ -85,8 +83,8 @@ int SignalModulation::detect_begin() {
   std::cout << "Detected start marker" << std::endl;
   Spectrum *s = nullptr;
   Spectrum *last = nullptr;
-  const int offset_step = 5;
-  for (int offset = 0; offset < 3 * p.N; offset += offset_step) {
+  const int offset_step = 1;
+  for (int offset = 0; offset < 5 * p.N; offset += offset_step) {
     s = get_spectrum(p.N + offset);
     float noise = get_noise(s);
     data << offset << "," << s->strength(p.f1) << "," << s->strength(p.f2)
