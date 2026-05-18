@@ -1,13 +1,8 @@
 package com.example.soundauth.ui
 
+import ads_mobile_sdk.ap
 import android.Manifest
 import android.content.pm.PackageManager
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.AudioTrack
-import android.media.MediaRecorder
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -15,33 +10,39 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
+import com.example.soundauth.AppPrefs
 import com.example.soundauth.SoundTransferWrapper
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import java.nio.file.WatchEvent
 
 private const val TAG = "SoundTestingScreen"
 
 class SoundTestingScreen() {
     val logger = Logger()
+    lateinit var appPrefs: AppPrefs
 
     fun start() {
         logger.setup()
@@ -64,8 +65,43 @@ class SoundTestingScreen() {
 
         }
 
-        val context = LocalContext.current
+        val navController = rememberNavController()
+        var selectedDestination by remember { mutableStateOf("Test") }
 
+        val context = LocalContext.current
+        appPrefs = AppPrefs(context)
+
+
+
+
+        PrimaryTabRow(selectedTabIndex = listOf("Configuration", "Test").indexOf(selectedDestination), modifier = Modifier.padding(3.dp)) {
+            listOf("Configuration", "Test").map {
+                Tab(
+                    selected = selectedDestination == it,
+                    onClick = {
+                        selectedDestination = it
+                    },
+                    text = {
+                        Text(
+                            text = it,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                )
+
+            }
+
+        }
+        AppNavHost(navController, selectedDestination)
+
+
+
+    }
+
+    @Composable
+    fun AppNavHost(controller: NavHostController, path: String) {
+        val context = LocalContext.current
         var hasRecordAudioPermission by remember {
             mutableStateOf(
                 ContextCompat.checkSelfPermission(
@@ -81,68 +117,77 @@ class SoundTestingScreen() {
             hasRecordAudioPermission = isGranted
         }
 
-        var isRecording by remember { mutableStateOf(false) }
-        var playInput by remember { mutableStateOf("17000|15000|0|17000") }
-        var msg by remember { mutableStateOf("") }
 
-        fun startRecording() {
-            if (!hasRecordAudioPermission) {
-                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                return
+        if (path == "Test") {
+            var isRecording by remember { mutableStateOf(false) }
+            var playInput by remember { mutableStateOf("17000|15000|0|17000") }
+            var msg by remember { mutableStateOf("") }
+
+            fun startRecording() {
+                if (!hasRecordAudioPermission) {
+                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    return
+                }
+
+                isRecording = true
+                SoundTransferWrapper.instance.launch(appPrefs)
             }
 
-            isRecording = true
-            SoundTransferWrapper.instance.openStreams()
-        }
+            fun stopRecording() {
+                isRecording = false
+                SoundTransferWrapper.instance.closeStreams()
+            }
 
-        fun stopRecording() {
-            isRecording = false
-            SoundTransferWrapper.instance.closeStreams()
-        }
+            fun startPlaying() {
+                PlayFrequencies(playInput)
+            }
 
-        fun startPlaying() {
-            PlayFrequencies(playInput)
-        }
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                FrequencyGenerator({
+                    playInput = it
+                }, {
+                    msg = it
+                }).UI()
 
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            FrequencyGenerator({
-                playInput = it
-            }, {
-                msg = it
-            }).UI()
-
-            Row {
-                Button(onClick = {
-                    if (isRecording) {
-                        stopRecording()
-                    } else {
-                        startRecording()
+                Row {
+                    Button(onClick = {
+                        if (isRecording) {
+                            stopRecording()
+                        } else {
+                            startRecording()
+                        }
+                    }) {
+                        Text(if (isRecording) "Stop Recording" else "Start Recording")
                     }
-                }) {
-                    Text(if (isRecording) "Stop Recording" else "Start Recording")
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Button(onClick = {
+                        startPlaying()
+                    }, enabled = playInput.isNotEmpty()) {
+                        Text("Play")
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Button(onClick = {
+                        SoundTransferWrapper.instance.send(msg.encodeToByteArray())
+                    }, enabled = msg.isNotEmpty()) {
+                        Text("Send Data")
+                    }
                 }
-                Spacer(modifier = Modifier.width(16.dp))
-                Button(onClick = {
-                    startPlaying()
-                }, enabled = playInput.isNotEmpty()) {
-                    Text("Play")
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Button(onClick = {
-                    SoundTransferWrapper.instance.send(msg.encodeToByteArray())
-                }, enabled = msg.isNotEmpty()) {
-                    Text("Send Data")
-                }
+
+                Text(msg.toBitString())
+                TestControls()
+
+
+                logger.UI()
             }
+        } else if (path == "Configuration") {
+            Column(modifier = Modifier.fillMaxSize().padding(top = 40.dp)) {
 
-            Text(msg.toBitString())
-            TestControls()
-
-            logger.UI()
+                SoundConfigScreen(appPrefs)
+            }
         }
     }
 

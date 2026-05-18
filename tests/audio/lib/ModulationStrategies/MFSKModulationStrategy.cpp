@@ -7,18 +7,17 @@
 #include <cmath>    // Required for log2
 #include <iostream> // Required for std::cerr
 
-MFSKModulationStrategy::MFSKModulationStrategy(int start_freq, int freq_spacing,
+MFSKModulationStrategy::MFSKModulationStrategy(ProtocolConfig* p, int start_freq, int freq_spacing,
                                                int M, int num_regions) {
+    this->p = p;
     this->M = M;
     this->freqs.clear();
 
-    // Resize freqs to hold the number of regions
     this->freqs.resize(num_regions);
 
     for (int i = 0; i < num_regions; i++) {
         for (int j = 0; j < M; j++) {
-            // Correctly map frequencies to specific regions
-            this->freqs[i].push_back(start_freq + (i * M * freq_spacing) + (j * freq_spacing));
+            this->freqs[i].push_back(freq_to_bin(start_freq) + (i * M * freq_spacing) + (j * freq_spacing));
         }
     }
 }
@@ -32,7 +31,6 @@ std::vector<bool> MFSKModulationStrategy::demodulate(int frame_offset) {
         float max_strength = p->lowest_strength;
         int best_index = 0;
 
-        // Find the index (0 to M-1) with the highest strength
         for (size_t i = 0; i < region.size(); ++i) {
             float strength = s->strength(region[i]);
             if (strength > max_strength) {
@@ -41,7 +39,6 @@ std::vector<bool> MFSKModulationStrategy::demodulate(int frame_offset) {
             }
         }
 
-        // Convert the index back to bits
         for (int i = bits_per_symbol - 1; i >= 0; i--) {
             out.push_back((best_index >> i) & 1);
         }
@@ -53,10 +50,10 @@ std::vector<bool> MFSKModulationStrategy::demodulate(int frame_offset) {
 std::string MFSKModulationStrategy::modulate(const std::vector<bool> &data) {
     int bits_per_symbol = static_cast<int>(std::log2(M));
     int bits_per_frame = static_cast<int>(freqs.size()) * bits_per_symbol;
+    std::vector<bool> to_transmit(data);
 
-    if (data.size() % bits_per_frame != 0) {
-        std::cerr << "Data not aligned to frame size." << std::endl;
-        return "";
+    while (to_transmit.size() % bits_per_frame != 0) {
+        to_transmit.push_back(0);
     }
 
     std::string out = "";
@@ -66,10 +63,9 @@ std::string MFSKModulationStrategy::modulate(const std::vector<bool> &data) {
         for (size_t region = 0; region < freqs.size(); region++) {
             int symbol_index = 0;
 
-            // Extract the bits for this specific region/symbol
             for (int j = 0; j < bits_per_symbol; j++) {
                 int bit_idx = (i * bits_per_frame) + (region * bits_per_symbol) + j;
-                if (data[bit_idx]) {
+                if (to_transmit[bit_idx]) {
                     symbol_index |= (1 << (bits_per_symbol - 1 - j));
                 }
             }

@@ -11,7 +11,7 @@
 #include <thread>
 #include <vector>
 
-SoundTransfer::SoundTransfer(ModulationStrategy* strategy, ProtocolConfig* p) {
+SoundTransfer::SoundTransfer(ModulationStrategy *strategy, ProtocolConfig *p) {
   this->p = p;
   this->strategy = strategy;
   sm = new SignalModulation(*p);
@@ -29,9 +29,15 @@ SoundTransfer::SoundTransfer(ModulationStrategy* strategy, ProtocolConfig* p) {
     std::lock_guard<std::mutex> lock(recv_mutex);
     current_message.clear();
 
-    for (uint8_t x : msg){
+    // std::cout << msg.size() << ' ';
+    // std::cout << "Receive callback: ";
+
+    for (uint8_t x : msg) {
       current_message.push_back(x);
+      // std::cout << std::hex << std::setw(2) << (int)x;
     }
+
+    // std::cout << std::endl;
 
     recv_cv.notify_all();
   });
@@ -39,7 +45,7 @@ SoundTransfer::SoundTransfer(ModulationStrategy* strategy, ProtocolConfig* p) {
 
 void SoundTransfer::run() {
   is_running = true;
-  transfer_thread = std::thread([this](){
+  transfer_thread = std::thread([this]() {
     std::vector<float> frame(p->N);
     while (is_running) {
       while (input_buffer->size() < p->N) {
@@ -59,9 +65,7 @@ void SoundTransfer::run() {
   // return worker;
 }
 
-void SoundTransfer::stop() {
-  is_running = false;
-}
+void SoundTransfer::stop() { is_running = false; }
 
 void SoundTransfer::send(std::vector<uint8_t> msg) {
   size_t chunk_len = strategy->bits_per_frame() * p->max_message_length;
@@ -72,7 +76,8 @@ void SoundTransfer::send(std::vector<uint8_t> msg) {
   }
 
   if (chunk_len % 8 != 0) {
-    std::cerr << "Current config does not support message partitioning" << std::endl;
+    std::cerr << "Current config does not support message partitioning"
+              << std::endl;
     return;
   }
 
@@ -80,7 +85,7 @@ void SoundTransfer::send(std::vector<uint8_t> msg) {
   size_t begin = 0;
 
   std::vector<uint8_t> to_send;
-  while(begin < msg.size()) {
+  while (begin < msg.size()) {
     size_t size = std::min(chunk_len_bytes, msg.size() - begin);
     to_send.resize(size);
     memcpy(to_send.data(), msg.data() + begin, size);
@@ -91,7 +96,8 @@ void SoundTransfer::send(std::vector<uint8_t> msg) {
 }
 
 std::vector<uint8_t> SoundTransfer::recv(size_t length, bool clear) {
-  std::vector<uint8_t> ret(length);
+  std::vector<uint8_t> ret;
+  ret.reserve(length);
   int received = 0;
 
   if (clear) {
@@ -99,45 +105,45 @@ std::vector<uint8_t> SoundTransfer::recv(size_t length, bool clear) {
       data_buffer.pop();
   }
 
-  if (data_buffer.size() > 0) {
-    for(int i = 0; i < std::min(data_buffer.size(), length); i++) {
-      ret[i] = data_buffer.front();
-      data_buffer.pop();
-      received++;
-    }
+  while (!data_buffer.empty() && ret.size() < length) {
+    ret.push_back(data_buffer.front());
+    data_buffer.pop();
   }
 
   size_t chunk_len = strategy->bits_per_frame() * p->max_message_length;
   size_t chunk_len_bytes = chunk_len / 8;
+
   if (length > chunk_len_bytes && chunk_len % 8 != 0) {
-    std::cerr << "Current config does not support message partitioning" << std::endl;
+    std::cerr << "Current config does not support message partitioning"
+              << std::endl;
     ret.resize(0);
     return ret;
   }
 
-
-
-  while (received < length) {
+  while (ret.size() < length) {
     std::unique_lock<std::mutex> lock(recv_mutex);
-    current_message.clear();
-    recv_cv.wait(lock, [this]() {
-      return current_message.size() > 0;
-    });
 
-    // here is race condition -> a chunk of message might get discarded
-    // because of how often does this receiver get called it probably doesn't matter
+    recv_cv.wait(lock, [this]() { return !current_message.empty(); });
 
-    int size = std::min(length - received, chunk_len_bytes);
-    memcpy(ret.data() + received, current_message.data(), size);
+    size_t needed = length - ret.size();
+    size_t available = current_message.size();
+    size_t to_copy = std::min(needed, available);
 
-    for(int i = size; i < chunk_len_bytes; i++) {
+    ret.insert(ret.end(), current_message.begin(),
+               current_message.begin() + to_copy);
+
+    for (size_t i = to_copy; i < available; ++i) {
       data_buffer.push(current_message[i]);
     }
 
-    received += chunk_len_bytes;
+    current_message.clear();
   }
 
   return ret;
+}
+
+size_t SoundTransfer::get_chunk_size() {
+  return p->max_message_length * strategy->bits_per_frame() / 8;
 }
 
 SoundTransfer::~SoundTransfer() {

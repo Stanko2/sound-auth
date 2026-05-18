@@ -38,7 +38,7 @@ int main() {
     EVP_PKEY_derive_init(derive_ctx);
     EVP_PKEY_derive_set_peer(derive_ctx, a_pub_key);
 
-    size_t secret_len;
+    size_t secret_len = 32;
     EVP_PKEY_derive(derive_ctx, nullptr, &secret_len);
     std::vector<unsigned char> secret(secret_len);
 

@@ -36,6 +36,7 @@ public:
   void run();
   void stop();
   void send(std::vector<uint8_t> msg);
+  size_t get_chunk_size();
   std::vector<uint8_t> recv(size_t length, bool clear = true);
   ~SoundTransfer();
 };

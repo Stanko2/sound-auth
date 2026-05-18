@@ -36,5 +36,8 @@ public:
     Communication (AudioControl* audio, const uint8_t address[2]);
     ~Communication();
     void recv(int length);
+    SoundTransfer* get_transfer() {
+      return transfer;
+    }
     // std::function<void(void)> receive_callback = NULL;
 };

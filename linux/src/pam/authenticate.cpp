@@ -1,7 +1,3 @@
-#include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
 #include <security/_pam_types.h>
 #include <security/pam_modules.h>
 #include <security/pam_ext.h>
@@ -15,20 +11,11 @@
 #define MAX_RETRIES 3
 #define GGWAVE_DISABLE_LOG
 
-AudioControl* a;
-
-void stop (int signal) {
-    if (a != NULL) {
-        a->end_loop();
-    }
-}
-
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv) {
-    std::signal(SIGINT, stop);
     AudioControl* audio = new AudioControl();
     AuthConfig config = AuthConfig::instance();
-    std::cout << "Using protocol: " << config.getProtocol() << std::endl;
-    a = audio;
+    // std::cout << "Using protocol: " << config.getProtocol() << std::endl;
+    // a = audio;
 
     Communication* comm = new Communication(audio, config.getAddress().data());
 
@@ -40,8 +27,6 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
             break;
         }
     }
-
-    std::signal(SIGINT, SIG_DFL);
 
     if (!success) {
         return PAM_MAXTRIES;

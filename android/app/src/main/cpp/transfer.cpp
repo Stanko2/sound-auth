@@ -70,22 +70,48 @@ Java_com_example_soundauth_SoundTransferWrapper_closeStreams(JNIEnv *env, jobjec
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_example_soundauth_SoundTransferWrapper_openStreams(JNIEnv *env, jobject thiz,
-                                                            int fft_size, int marker_f1, int marker_f2, float lowest_stength, float strength_threshold) {
-    ProtocolConfig* p = createProtocolConfig(fft_size, 48000, marker_f1, marker_f2);
-    p->lowest_strength = lowest_stength; //-125;
-    p->strength_threshold = strength_threshold; //-90;
+Java_com_example_soundauth_SoundTransferWrapper_openStreams(
+        JNIEnv *env, jobject thiz,
+        jint fft_size, jint marker_f1, jint marker_f2,
+        jfloat lowest_strength, jfloat strength_threshold,
+        jint chunk_size, jstring modulation_type, jint start_freq, jint spacing,
+        jint bits_per_frame, jint region_size, jint num_regions,
+        jint f1, jint f2) {
 
-//    ModulationStrategy* strategy = new MFSKModulationStrategy(p->f1, 5, 8, 2);
-    ModulationStrategy* strategy = new TwoTonePerBitModulationStrategy(p->f1, 4, 5);
+    // 1. Setup Protocol
+    ProtocolConfig* p = createProtocolConfig(fft_size, 48000, marker_f1, marker_f2);
+    p->lowest_strength = lowest_strength;
+    p->strength_threshold = strength_threshold;
+    p->max_message_length = chunk_size;
+
+    // 2. Parse Modulation Type
+    const char *type_ptr = env->GetStringUTFChars(modulation_type, nullptr);
+    std::string mod_type(type_ptr);
+
+    ModulationStrategy* strategy = nullptr;
+
+    if (mod_type == "2tone") {
+        strategy = new TwoTonePerBitModulationStrategy(p,start_freq, bits_per_frame, spacing);
+    } else if (mod_type == "MFSK") {
+        strategy = new MFSKModulationStrategy(p, start_freq, spacing, region_size, num_regions);
+    } else if (mod_type == "simple") {
+        strategy = new SimpleTwoBitModulationStrategy(f1, f2);
+    }
+
+    env->ReleaseStringUTFChars(modulation_type, type_ptr);
+
+    if (!strategy) return; // Add error handling as needed
+
+    // 3. Initialize Transfer
+    // Note: Ensure you clean up old 'sound_transfer' and 'strategy'
+    // instances here if this is called multiple times.
     sound_transfer = new SoundTransfer(strategy, p);
+
     OpenInputStream(*p, sound_transfer);
     OpenOutputStream(*p, sound_transfer);
     sound_transfer->run();
-
     StartStreams();
 }
-
 
 extern "C"
 JNIEXPORT void JNICALL
@@ -105,14 +131,14 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_testTx(JNIEnv *env, jobject thiz) {
     if (sound_transfer == nullptr) return;
-    test_tx(sound_transfer, 8, 64);
+    test_tx(sound_transfer, 8);
 }
 
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_soundauth_ui_SoundTestingScreen_testRx(JNIEnv *env, jobject thiz) {
     if (sound_transfer == nullptr) return;
-    test_rx(sound_transfer, 8, 64);
+    test_rx(sound_transfer, 8);
 }
 extern "C"
 JNIEXPORT jbyteArray JNICALL

@@ -1,30 +1,19 @@
 package com.example.soundauth;
 
-import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.media.AudioAttributes;
-import android.media.AudioFormat;
-import android.media.AudioManager;
-import android.media.AudioTrack;
 import android.os.IBinder;
-import android.preference.Preference;
-import android.preference.PreferenceManager;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
-import androidx.core.app.ServiceCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.Random;
-import java.util.Timer;
 
 public class ListenService extends Service {
     private static final String TAG = "ListenService";
@@ -155,7 +144,7 @@ public class ListenService extends Service {
 
         SoundTransferWrapper.Companion.getInstance().init(getAddress());
 
-        SoundTransferWrapper.Companion.getInstance().openStreams(1024, 15000, 17000, -100f, -80f);
+        SoundTransferWrapper.Companion.getInstance().launch(new AppPrefs(this));
         var backgroundThread = new Thread(()-> {
             while(true) {
                 byte[] header = SoundTransferWrapper.Companion.getInstance().recv(5, true);

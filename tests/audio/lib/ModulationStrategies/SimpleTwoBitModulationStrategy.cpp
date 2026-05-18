@@ -6,8 +6,8 @@
 #include <vector>
 
 SimpleTwoBitModulationStrategy::SimpleTwoBitModulationStrategy(int f1, int f2) {
-  this->f1 = bin_to_freq(f1);
-  this->f2 = bin_to_freq(f2);
+  this->f1 = f1;
+  this->f2 = f2;
 }
 
 std::string

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <ios>
 #include <iostream>
 #include <mutex>
@@ -83,8 +84,8 @@ int SignalModulation::detect_begin() {
   std::cout << "Detected start marker" << std::endl;
   Spectrum *s = nullptr;
   Spectrum *last = nullptr;
-  const int offset_step = 1;
-  for (int offset = 0; offset < 5 * p.N; offset += offset_step) {
+  const int offset_step = 5;
+  for (int offset = 0; offset < 3 * p.N; offset += offset_step) {
     s = get_spectrum(p.N + offset);
     float noise = get_noise(s);
     data << offset << "," << s->strength(p.f1) << "," << s->strength(p.f2)
@@ -198,11 +199,6 @@ void SignalModulation::enqueue_frame(const std::vector<float> &samples) {
         sync_offset = x;
         recorder_state = processing;
         msg_frames = 0;
-        // if (false) { // TODO: pridat switch na logovanie.
-        //   int id = rand();
-        //   message_data_file.open("test-data/message" + std::to_string(id));
-        //   message_data_file << "f1,f2,reading" << std::endl;
-        // }
       }
     }
 
@@ -219,7 +215,7 @@ void SignalModulation::enqueue_frame(const std::vector<float> &samples) {
         rx_callback(received_bytes);
       }
       received_bytes.clear();
-      rx_buffer.clear();
+      while (!rx_buffer.empty()) rx_buffer.pop();
     }
   }
 }
@@ -230,7 +226,7 @@ float bin_to_freq(const ProtocolConfig *p, int bin) {
 }
 
 void SignalModulation::transmit_data(std::vector<uint8_t> &data) {
-  assert(data.size() <= p.max_message_length);
+  assert(data.size() <= p.max_message_length * strategy->bits_per_frame() / 8);
 
   std::vector<bool> tx_buffer;
   for (uint8_t byte : data) {
@@ -294,16 +290,21 @@ void SignalModulation::demodulate() {
   }
 
   for (auto i : bits) {
-    rx_buffer.push_back(i);
+    rx_buffer.push(i);
   }
-  // std::cout << "Got: " << rx_buffer[rx_buffer.size() - 1] << std::endl;
-  // std::cout << "Got: " << rx_buffer[rx_buffer.size() - 2] << std::endl;
 
-  if (rx_buffer.size() == 8) {
-    // message_file << "Received byte: " << ToByte(rx_buffer) << std::endl;
-    std::cout << ToByte(rx_buffer) << std::flush;
-    received_bytes.push_back(ToByte(rx_buffer));
-    rx_buffer.clear();
+  while (rx_buffer.size() >= 8) {
+    uint8_t byte = 0;
+    for (int i = 0; i < 8; i++) {
+      bool x = rx_buffer.front();
+      rx_buffer.pop();
+      if (x) {
+        byte |= 1 << (7-i);
+      }
+    }
+
+    std::cout << std::hex << (int) byte << std::dec << std::flush;
+    received_bytes.push_back(byte);
   }
 }
 

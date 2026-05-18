@@ -9,6 +9,7 @@
 #include <sstream>
 #include <vector>
 #include "pam/setup.cpp"
+#include "sound-transfer-lib/tests/transferTest.h"
 
 AudioControl* a;
 
@@ -55,6 +56,10 @@ int main(int argc, char** argv) {
         } else if (strncmp(argv[1], "test", 10) == 0) {
             bool r = runAuth(c);
             ret = !r;
+        } else if (strncmp(argv[1], "test-tx", 10) == 0) {
+          test_tx(c->get_transfer(), 8);
+        } else if (strncmp(argv[1], "test-rx", 10) == 0) {
+          test_rx(c->get_transfer(), 8);
         }
 
     } else {

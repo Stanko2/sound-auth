@@ -7,6 +7,7 @@
 #include <fstream>
 #include <functional>
 #include <mutex>
+#include <queue>
 #include <vector>
 
 #include "ModulationStrategies/modulationStrategy.h"
@@ -51,7 +52,7 @@ private:
   Waveforms *waveforms;
   ModulationStrategy *strategy = nullptr;
 
-  std::vector<bool> rx_buffer;
+  std::queue<bool> rx_buffer;
   std::vector<uint8_t> received_bytes;
 
   /*

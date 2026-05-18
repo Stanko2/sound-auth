@@ -45,6 +45,7 @@ void Communication::init_transfer() {
       protocolConfig["lowestStrength"].value_or(-100);
   p.strength_threshold =
       protocolConfig["strengthThreshold"].value_or(-60);
+  p.max_message_length = protocolConfig["chunkSize"].value_or(64);
 
   std::string modulationType =
       modulationConfig["type"].value_or("2tone");
@@ -52,19 +53,19 @@ void Communication::init_transfer() {
   ModulationStrategy *strategy;
 
   if (modulationType == "2tone") {
-    int start = modulationConfig["startFrequency"].value_or(p.f1);
+    int start = modulationConfig["startFrequency"].value_or(15000);
     int spacing = modulationConfig["spacing"].value_or(5);
     int bitsPerFrame =
         modulationConfig["bitsPerFrame"].value_or(4);
-    strategy = new TwoTonePerBitModulationStrategy(p.f1, bitsPerFrame, spacing);
+    strategy = new TwoTonePerBitModulationStrategy(&p, start, bitsPerFrame, spacing);
   } else if (modulationType == "MFSK") {
-    int start = modulationConfig["startFrequency"].value_or(p.f1);
+    int start = modulationConfig["startFrequency"].value_or(15000);
     int spacing = modulationConfig["spacing"].value_or(5);
     int regionSize = modulationConfig["regionSize"].value_or(4);
     int numRegions = modulationConfig["numRegions"].value_or(2);
 
     strategy =
-        new MFSKModulationStrategy(start, spacing, regionSize, numRegions);
+        new MFSKModulationStrategy(&p, start, spacing, regionSize, numRegions);
   } else if (modulationType == "simple") {
     int f1 = modulationConfig["f1"].value_or(p.f1);
     int f2 = modulationConfig["f2"].value_or(p.f2);

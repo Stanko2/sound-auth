@@ -16,6 +16,7 @@ protected:
   SignalModulation* sm;
   ProtocolConfig* p;
   float bin_to_freq(int bin) const;
+  int freq_to_bin(const float freq) const;
   virtual void print(std::ostream& o) const;
 public:
   virtual ~ModulationStrategy() = default;
@@ -81,7 +82,7 @@ private:
 protected:
   void print(std::ostream& os) const override;
 public:
-  TwoTonePerBitModulationStrategy(size_t start_frequency, uint8_t bits_per_frame, uint8_t freq_offset);
+  TwoTonePerBitModulationStrategy(ProtocolConfig* p, size_t start_frequency, uint8_t bits_per_frame, uint8_t freq_offset);
   std::string modulate(const std::vector<bool> &data) override;
   std::vector<bool> demodulate(int frame_offset) override;
   bool has_noise(Spectrum* s) override;
@@ -103,7 +104,7 @@ public:
    * M: region size - must be power of 2
    * num_regions: how many regions to use
    */
-  MFSKModulationStrategy(int start_freq, int freq_spacing, int M, int num_regions);
+  MFSKModulationStrategy(ProtocolConfig* p, int start_freq, int freq_spacing, int M, int num_regions);
 
   std::string modulate(const std::vector<bool> &data) override;
   std::vector<bool> demodulate(int frame_offset) override;

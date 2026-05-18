@@ -34,9 +34,9 @@ public:
     std::string getPlaybackDeviceName() const;
     std::string getCaptureDeviceName() const;
     std::vector<uint8_t> getSecretKey(std::string user) const;
-    void setSecretKey(std::string user, const std::vector<uint8_t>& key) const;
-    void setAddress(std::string user, const std::vector<uint8_t>& address) const;
-    void setSetting(const char* path, const std::string value) const;
+    void setSecretKey(std::string user, const std::vector<uint8_t>& key);
+    void setAddress(std::string user, const std::vector<uint8_t>& address);
+    void setSetting(const char* path, const std::string& value);
     std::vector<uint8_t> GetPhoneAddress(std::string user) const;
     const std::vector<uint8_t> getAddress();
     toml::table getConfig() {

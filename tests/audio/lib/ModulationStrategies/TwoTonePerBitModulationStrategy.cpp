@@ -6,12 +6,16 @@
 #include <string>
 #include <vector>
 
-TwoTonePerBitModulationStrategy::TwoTonePerBitModulationStrategy(
+TwoTonePerBitModulationStrategy::TwoTonePerBitModulationStrategy( ProtocolConfig* p,
     size_t start_frequency, uint8_t bits_per_frame, uint8_t freq_offset) {
+  this->p = p;
   frequencies.clear();
   for (size_t i = 0; i < bits_per_frame; i++) {
-    frequencies.push_back(start_frequency + (2 * i) * freq_offset);
-    frequencies.push_back(start_frequency + (2 * i + 1) * freq_offset);
+    float freq1 = freq_to_bin(start_frequency) + (2 * i) * freq_offset;
+    float freq2 = freq_to_bin(start_frequency) + (2 * i + 1) * freq_offset;
+
+    frequencies.push_back(freq1);
+    frequencies.push_back(freq2);
   }
 }
 

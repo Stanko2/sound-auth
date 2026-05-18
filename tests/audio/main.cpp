@@ -146,7 +146,7 @@ int main(int argc, const char *argv[]) {
   // ModulationStrategy *strategy =
   //     new TwoTonePerBitModulationStrategy(p.f1, 8, 5);
 
-  ModulationStrategy *strategy = new TwoTonePerBitModulationStrategy(p.f1, 2, 5);
+  ModulationStrategy *strategy = new TwoTonePerBitModulationStrategy(&p, 15000, 2, 5);
 
   std::cout << strategy << std::endl;
   ctx.t = new SoundTransfer(strategy, &p);
@@ -167,9 +167,9 @@ int main(int argc, const char *argv[]) {
   } else if (cmd == "send" || cmd == "play") {
     sendData(ctx, argv[2]);
   } else if (cmd == "tx-tests") {
-    test_tx(ctx.t, 8, 64);
+    test_tx(ctx.t, 8);
   } else if (cmd == "rx-tests") {
-    test_rx(ctx.t, 8, 64);
+    test_rx(ctx.t, 8);
   }
 
   // loop_thread.join();

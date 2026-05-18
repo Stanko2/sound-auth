@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../ModulationStrategies/modulationStrategy.h"
-#include "../modulation.h"
 #include "../entry.h"
+#include "../modulation.h"
 #include <cstdint>
 #include <functional>
 #include <vector>
@@ -39,8 +39,7 @@ using RxCallback = std::function<void(const std::vector<uint8_t> &)>;
  *  - base_seed: base seed used for reproducible generation (if 0,
  * implementation may use time)
  */
-void test_tx(SoundTransfer *t, int messages = 8, int msg_len = 16,
-             int base_seed = 0);
+void test_tx(SoundTransfer *t, int messages = 8, int base_seed = 0);
 
 /*
  * receives given messages, compares them with generated ones and prints number
@@ -55,5 +54,4 @@ void test_tx(SoundTransfer *t, int messages = 8, int msg_len = 16,
  *  - base_seed: base seed used to generate the expected messages (must match
  * test_tx)
  */
-void test_rx(SoundTransfer *t, int messages = 8, int msg_len = 16,
-             int base_seed = 0);
+void test_rx(SoundTransfer *t, int messages = 8, int base_seed = 0);

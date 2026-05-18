@@ -51,9 +51,9 @@ std::vector<uint8_t> gen_random_msg(int seed, int length) {
   return out;
 }
 
-void test_tx(SoundTransfer *t, int messages,
-             int msg_len, int base_seed) {
+void test_tx(SoundTransfer *t, int messages, int base_seed) {
 
+  size_t msg_len = t->get_chunk_size();
   for (int i = 0; i < messages; ++i) {
     int seed = base_seed + i;
     std::vector<uint8_t> msg = gen_random_msg(seed, msg_len);
@@ -73,9 +73,9 @@ void test_tx(SoundTransfer *t, int messages,
   }
 }
 
-void test_rx(SoundTransfer *t, int messages, int msg_len, int base_seed) {
-
-
+void test_rx(SoundTransfer *t, int messages, int base_seed) {
+  size_t msg_len = t->get_chunk_size();
+  std::cout << "Message length: " << msg_len << std::endl;
   auto state = std::make_shared<State>();
 
   // Helper to format vector as hex string
@@ -102,7 +102,7 @@ void test_rx(SoundTransfer *t, int messages, int msg_len, int base_seed) {
 
   float errors = 0;
   for (int counter = 0; counter < messages; counter++) {
-    std::vector<uint8_t> received = t->recv(msg_len);
+    std::vector<uint8_t> received = t->recv(msg_len, true);
 
     std::vector<uint8_t> expected = gen_random_msg(counter, msg_len);
     int bits_diff = compare(expected, received);
