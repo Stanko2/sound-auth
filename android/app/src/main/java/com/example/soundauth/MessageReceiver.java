@@ -128,7 +128,7 @@ public class MessageReceiver implements Runnable, AudioManager.OnAudioFocusChang
                     Log.d(TAG, "MessageReceived: " + bytesToHex(data) + ", address " + bytesToHex(address));
                     if (!is_message_relevant(data)) continue;
                     messages.add(data);
-                    msgHandler.OnMessage(new MessageHandler.Message(data));
+                    msgHandler.onMessage(new MessageHandler.Message(data));
                     try {
                         Thread.sleep(10);
                     } catch (InterruptedException e) {

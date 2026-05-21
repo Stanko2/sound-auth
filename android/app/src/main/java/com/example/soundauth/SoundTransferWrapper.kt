@@ -61,15 +61,40 @@ class SoundTransferWrapper {
 
     external fun recv(len: Int, clear: Boolean = false): ByteArray
 
+    fun crc16(data: ByteArray, length: Int): Int {
+        var crc = 0xFFFF
+
+        for (i in 0 until length) {
+            crc = crc xor (data[i].toInt() and 0xFF)
+
+            for (j in 0 until 8) {
+                crc = if ((crc and 1) != 0) {
+                    (crc ushr 1) xor 0xA001
+                } else {
+                    crc ushr 1
+                }
+            }
+        }
+
+        return crc and 0xFFFF
+    }
+
     @Synchronized
     fun enqueueMessage(data: ByteArray, cmd: Byte, to: ByteArray) {
-        val msg = ByteArray(data.size + 5)
+        val msg = ByteArray(data.size + 7)
         msg[0] = to[0]
         msg[1] = to[1]
         msg[2] = address[0]
         msg[3] = address[1]
         msg[4] = cmd
         System.arraycopy(data, 0, msg, 5, data.size)
+
+        val crc = crc16(msg, msg.size - 2)
+
+        msg[msg.size - 2] = ((crc ushr 8) and 0xFF).toByte()
+        msg[msg.size - 1] = (crc and 0xFF).toByte()
+
+
         Log.d("MessageHandler", "enqueueMessage: ${ListenService.bytesToHex(msg)}")
         send(msg)
     }

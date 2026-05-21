@@ -35,7 +35,7 @@ public:
     int send_broadcast(std::vector<uint8_t> &message);
     Communication (AudioControl* audio, const uint8_t address[2]);
     ~Communication();
-    void recv(int length);
+    int recv(int length);
     SoundTransfer* get_transfer() {
       return transfer;
     }

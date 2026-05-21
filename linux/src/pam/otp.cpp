@@ -106,6 +106,7 @@ bool verify(std::vector<uint8_t> password, std::vector<uint8_t> challenge) {
     return true;
 }
 bool runAuth(Communication* c) {
+    c->get_transfer()->set_timeout(3000);
     AuthConfig cfg = AuthConfig::instance();
     std::vector<uint8_t> challenge = get_challenge();
     std::vector<uint8_t> message;
@@ -119,8 +120,12 @@ bool runAuth(Communication* c) {
     // c->recv();
 
     std::vector<uint8_t> data;
-    c->recv(5 + SECRET_KEY_SIZE);
+    c->recv(7 + SECRET_KEY_SIZE);
     int ret = c->get_data(const_cast<std::vector<uint8_t>&>(data));
+    if (ret == 0) {
+      return false;
+    }
+
     challenge.erase(challenge.begin());
     bool success = verify(data, challenge);
 
@@ -132,7 +137,4 @@ bool runAuth(Communication* c) {
     c->stop();
 
     return success;
-    // return waitUntil(3000, [&running](){
-    //     return running;
-    // });
 }

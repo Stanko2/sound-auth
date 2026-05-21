@@ -107,6 +107,24 @@ int Communication::get_data(std::vector<uint8_t> &out) {
   return out.size();
 }
 
+static uint16_t crc16(const uint8_t *data, size_t length) {
+    uint16_t crc = 0xFFFF;
+
+    for (size_t i = 0; i < length; i++) {
+        crc ^= data[i];
+
+        for (int j = 0; j < 8; j++) {
+            if (crc & 1) {
+                crc = (crc >> 1) ^ 0xA001;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+
+    return crc;
+}
+
 int Communication::send_message(std::vector<uint8_t> &data,
                                 const uint8_t to[2]) {
   assert(data.size() > 0);
@@ -117,6 +135,11 @@ int Communication::send_message(std::vector<uint8_t> &data,
   message[2] = myaddr[0];
   message[3] = myaddr[1];
   message.insert(message.end(), data.begin(), data.end());
+
+  uint16_t crc = crc16(message.data(), message.size());
+
+  message.push_back((crc >> 8) & 0xFF);
+  message.push_back(crc & 0xFF);
 
   transfer->send(message);
 
@@ -133,27 +156,27 @@ int Communication::send_broadcast(std::vector<uint8_t> &data) {
   return send_message(data, BROADCAST_ADDRESS);
 }
 
-void Communication::recv(int len) {
+int Communication::recv(int len) {
   std::vector<uint8_t> a;
   received_data.clear();
   while (1) {
     a = transfer->recv(4, true);
 
+    if (a.empty()) {
+      return -1;
+    }
+
     if (is_valid(a)) {
-      std::cerr << "Valid, returning" << std::endl;
       break;
     } else {
-      std::cerr << "Invalid message to " << std::hex << a[0] << a[1]
-                << " from: " << a[2] << a[3] << std::endl;
+      // std::cerr << "Invalid message to " << std::hex << a[0] << a[1]
+      //           << " from: " << a[2] << a[3] << std::endl;
     }
   }
 
   received_data.insert(received_data.end(), a.begin(), a.end());
-  std::cout << "received: " << vectorToHexString(received_data) << std::endl;
-  std::cout << "receiving additional " << len - 4 << " bytes" << std::endl;
   a.clear();
   a = transfer->recv(len - 4, false);
-  std::cout << "a: " << vectorToHexString(a) << std::endl;
   received_data.insert(received_data.end(), a.begin(), a.end());
-  std::cout << "received: " << vectorToHexString(received_data) << std::endl;
+  return 0;
 }

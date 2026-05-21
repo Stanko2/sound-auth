@@ -3,9 +3,11 @@
 #include "RingBuffer.h"
 #include "modulation.h"
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <ctime>
 #include <iomanip>
 #include <mutex>
 #include <thread>
@@ -95,6 +97,15 @@ void SoundTransfer::send(std::vector<uint8_t> msg) {
   }
 }
 
+uint64_t timeSinceEpochMillisec() {
+  using namespace std::chrono;
+  return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+}
+
+void SoundTransfer::set_timeout(int timeout) {
+  this->timeout = timeout;
+}
+
 std::vector<uint8_t> SoundTransfer::recv(size_t length, bool clear) {
   std::vector<uint8_t> ret;
   ret.reserve(length);
@@ -123,7 +134,19 @@ std::vector<uint8_t> SoundTransfer::recv(size_t length, bool clear) {
   while (ret.size() < length) {
     std::unique_lock<std::mutex> lock(recv_mutex);
 
-    recv_cv.wait(lock, [this]() { return !current_message.empty(); });
+    if (timeout == 0) {
+      recv_cv.wait(lock, [this]() {
+        return !current_message.empty();
+      });
+    } else {
+      recv_cv.wait_for(lock, std::chrono::milliseconds(timeout),  [this]() {
+        return !current_message.empty();
+      });
+    }
+
+    if (current_message.empty() && clear) {
+      return ret;
+    }
 
     size_t needed = length - ret.size();
     size_t available = current_message.size();

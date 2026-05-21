@@ -33,8 +33,8 @@ public class Auth {
         return dev.secret;
     }
 
-    public DeviceInfo handlePairRequest(MessageHandler.Message msg) {
-        dev = new DeviceInfo(msg.source);
+    public DeviceInfo handlePairRequest(MessageHandler.Message msg) throws MessageHandler.InvalidCrcException {
+        dev = new DeviceInfo(msg);
         publicKey = generateKey();
         Log.d(TAG,  "address: " + ListenService.bytesToHex(msg.source) + " Key: " + ListenService.bytesToHex(publicKey));
         dev.secret = getSecret(dev.publicKey);

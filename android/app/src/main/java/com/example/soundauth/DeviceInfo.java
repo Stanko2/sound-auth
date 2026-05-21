@@ -25,18 +25,20 @@ public class DeviceInfo {
         this.name = json.getString("name");
     }
 
-    public DeviceInfo(byte[] address) {
+    public DeviceInfo(MessageHandler.Message msg) throws MessageHandler.InvalidCrcException {
 //        Log.d("", "DeviceInfo: " + new String(data));
-        this.id = new byte[] {address[0], address[1]};
+        this.id = new byte[] {msg.source[0], msg.source[1]};
+
         StringBuilder s = new StringBuilder();
         byte x = 0;
         while (x != ':') {
-            x = SoundTransferWrapper.Companion.getInstance().recv(1, false)[0];
+            x = msg.recv(1)[0];
             s.append((char) x);
         }
         this.name = s.toString();
-        publicKey = SoundTransferWrapper.Companion.getInstance().recv(Auth.KEY_LENGTH, false);
+        this.publicKey = msg.recv(Auth.KEY_LENGTH);
         Log.d("", "New device:" + this);
+        msg.end();
     }
 
     public String json() {

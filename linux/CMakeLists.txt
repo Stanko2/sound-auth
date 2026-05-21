@@ -9,7 +9,6 @@ find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(PIPEWIRE REQUIRED libpipewire-0.3)
 
-find_package(libconfig REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(FFTW3 REQUIRED)
 
@@ -45,3 +44,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE ${PIPEWIRE_LIBRARIES} ${FFTW3_LIBR
 target_compile_options(${PROJECT_NAME} PRIVATE ${PIPEWIRE_CFLAGS_OTHER} -g)
 
 install(TARGETS pam_sound_auth LIBRARY DESTINATION /lib/security)
+install(TARGETS ${PROJECT_NAME} DESTINATION /usr/local/bin)
+install(FILES sound-auth.cfg DESTINATION /etc)
+install(CODE "
+    execute_process(
+        COMMAND chmod u+s /usr/local/bin/${PROJECT_NAME}
+    )
+")

@@ -65,38 +65,43 @@ public class ListenService extends Service {
         var addr = getAddress();
         Auth auth = new Auth(sender);
         DeviceInfo dev = null;
-        switch (msg.command) {
-            case 0x01:
-                dev = auth.handlePairRequest(msg);
-                intent.setAction("device_add");
-                intent.putExtra("device", dev.json());
-//                intent.putExtra("id", msg.source);
-//                intent.putExtra("secret", dev.secret);
-                SoundTransferWrapper.Companion.getInstance().enqueueMessage(auth.getPublicKey(), (byte)0x01, msg.source);
-                break;
-            case 0x02:
-                if (msg.address[0] != addr[0] || msg.address[1] != addr[1])
+        try {
+            switch (msg.command) {
+                case 0x01:
+                    dev = auth.handlePairRequest(msg);
+                    intent.setAction("device_add");
+                    intent.putExtra("device", dev.json());
+    //                intent.putExtra("id", msg.source);
+    //                intent.putExtra("secret", dev.secret);
+                    SoundTransferWrapper.Companion.getInstance().enqueueMessage(auth.getPublicKey(), (byte)0x01, msg.source);
                     break;
-                for(var d : p.getDevices()){
-                    if (d.id[0] == msg.source[0] && d.id[1] == msg.source[1]){
-                        dev = d;
+                case 0x02:
+                    if (msg.address[0] != addr[0] || msg.address[1] != addr[1])
+                        break;
+                    for(var d : p.getDevices()){
+                        if (d.id[0] == msg.source[0] && d.id[1] == msg.source[1]){
+                            dev = d;
+                        }
                     }
-                }
-                auth.setDevice(dev);
-                if (dev == null) {
-                    intent.setAction("error");
-                    intent.putExtra("message", "Received login from unknown device");
-                    break;
-                }
+                    auth.setDevice(dev);
+                    if (dev == null) {
+                        intent.setAction("error");
+                        intent.putExtra("message", "Received login from unknown device");
+                        break;
+                    }
 
-                var data = SoundTransferWrapper.Companion.getInstance().recv(Auth.CHALLENGE_LENGTH, false);
-                Log.d(TAG, "Received login challenge");
-                var res = auth.respond(data);
-                SoundTransferWrapper.Companion.getInstance().enqueueMessage(res, (byte)0x02, dev.id);
-                break;
-            default:
-                intent.setAction("error");
-                intent.putExtra("message", "Unknown Command: " + msg.command);
+                    var data = SoundTransferWrapper.Companion.getInstance().recv(Auth.CHALLENGE_LENGTH, false);
+                    Log.d(TAG, "Received login challenge");
+                    var res = auth.respond(data);
+                    SoundTransferWrapper.Companion.getInstance().enqueueMessage(res, (byte)0x02, dev.id);
+                    break;
+                default:
+                    intent.setAction("error");
+                    intent.putExtra("message", "Unknown Command: " + msg.command);
+            }
+        } catch (MessageHandler.InvalidCrcException e) {
+            intent.setAction("error");
+            intent.putExtra("message", "Bad CRC checksum: " + msg.command);
         }
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }

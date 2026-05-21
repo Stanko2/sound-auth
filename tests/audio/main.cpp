@@ -148,7 +148,7 @@ int main(int argc, const char *argv[]) {
 
   ModulationStrategy *strategy = new TwoTonePerBitModulationStrategy(&p, 15000, 2, 5);
 
-  std::cout << strategy << std::endl;
+  // std::cout << strategy << std::endl;
   ctx.t = new SoundTransfer(strategy, &p);
 
   init_pw_common(ctx);

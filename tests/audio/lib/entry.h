@@ -13,6 +13,7 @@ private:
   SignalModulation* sm;
   ProtocolConfig* p;
   ModulationStrategy* strategy;
+  int timeout = 0;
   Ringbuffer<float>* input_buffer;
   Ringbuffer<float>* output_buffer;
   std::atomic<bool> is_running;
@@ -36,6 +37,9 @@ public:
   void run();
   void stop();
   void send(std::vector<uint8_t> msg);
+
+  void set_timeout(int timeout);
+
   size_t get_chunk_size();
   std::vector<uint8_t> recv(size_t length, bool clear = true);
   ~SoundTransfer();

@@ -27,9 +27,6 @@ GaussianWindow::GaussianWindow(int N, float alpha) {
   generated_window.resize(N);
 
   for (int n = 0; n < N; ++n) {
-    double val =
-        (n - center) / (alpha * (N - 1) / 2.0); // Simplified internal term
-    // Alternatively, using the standard formula:
     double numerator = n - center;
     double denominator = (N - 1) / 2.0;
     generated_window[n] =

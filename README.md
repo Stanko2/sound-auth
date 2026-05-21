@@ -23,12 +23,13 @@ There are 2 options to build the app:
 Install the app by copying the `.apk` file to your phone and opening it.
 Make sure to allow the app to access the microphone.
 
-After successful installation click the Receive button to start the background service. The app will start listening for
-audio messages and retransmitting them back.
+After successful installation click the Receive button to start the background authentication service. 
+
+On android the configuration is done via GUI in the application. Tap on the settings icon on top left corner to open the configuration menu. All settings are explained in the configuration file section.
 
 ### Linux
 
-In order to build the PAM module you need to have following packages installed (On Ubuntu): `libpam0g-dev`, `libsdl2-dev`, `cmake`, `build-essential`, `pkg-config`, `libconfig++-dev`.
+In order to build the PAM module you need to have following packages installed (On Ubuntu): `libpam0g-dev`, `cmake`, `build-essential`, `pkg-config`, `fftw3-dev`.
 Before proceeding, make sure you have all the necessary packages installed.
 
 Build the PAM module using the following commands:
@@ -37,42 +38,71 @@ Build the PAM module using the following commands:
 cd linux/
 cmake .
 make
+sudo make install
 ```
 
-This should build 2 files - `pam_sound_auth.so` and `sound_auth` binary. The `sound_auth` binary is used for setup and testing purposes.
+This should build 2 files - `pam_sound_auth.so` and `sound-auth` binary. The `sound-auth` binary is used for setup and testing purposes.
 
 
 #### Configuration
 
-1. In order to use PAM module you need to copy `pam_sound_auth.so` to the PAM modules directory (for example: `/lib/security/`).
-
-2. To set up the PAM module, you need to add the following line to the top of the PAM configuration file of the service you want to apply the module to:
+1. To set up the PAM module, you need to add the following line to the top of the PAM configuration file of the service you want to apply the module to:
 
 ```
 auth    sufficient      pam_sound_auth.so
 ```
 
-3. You also need to copy the `sound-auth.cfg` file to `/etc` and make it readable by only root. It will contain secret keys for all users.
+2. You tweak some values in the `/etc/sound-auth.cfg` file. Make sure to have the same configuration on all 
+devices.
 
-##### Configuration file
+3. Run `sound-auth setup` to transfer credentials and set up the authentication module.
 
-- `protocol` - which protocol to use when transferring messages - one of `ultrasound_fastest`, `ultrasound_fast`, `ultrasound_normal`, `audible_normal`, `audible_fast`, `audible_fastest`. Some speakers could not handle the ultrasound frequencies. And higher speeds tend to have more errors in transmission.
-- `devices` - which device to use for capture or playback (sending and receiving messages). All connected devices could be queried by `./sound-auth list`. Leaving to `auto` chooses the device automatically.
-- the rest of the file is auto-generated - contains `address` of this computer and user credentials (keys).
+## Configuration file
+
+- Devices - which device to use for capture or playback (sending and receiving messages). All connected devices could be queried by `sound-auth list`. Leaving to `auto` uses the system default device.
+- address - the address of this computer, will be set automatically on the first run.
+- Protocol settings
+  - **fftSize** - the size of the FFT window (how many samples per one frame)
+  - **markerF1, markerF2** - frequencies to use for marker detection (in Hz)
+  - **lowestStrength** - the accepted lowest amplitude (in dB). Everything below will be clamped to this value. Typically around $-120$ to $-90$ dB.
+  - **strengthThreshold** - threshold for marker detection (in dB).
+    - if not detecting any messages, lower this value
+    - if detecting false positives, raise this value
+  - **chunkSize** - how frames per chunk. Larger messages will be split into multiple chunks and processed individually.
+- Modulation settings
+  - **modulationType** - the type of modulation to use. Must be one of `simple`, `2tone`, `MFSK`
+  - Simple
+    - **F1, F2** - frequencies to use for modulation (in Hz)
+  - 2tone
+    - **startFrequency** - the starting frequency for modulation (in Hz)
+    - **spacing** - the spacing between two used frequencies (in bins)
+    - **bitsPerFrame** - the number of bits per frame - frequencies played simultaneously
+  - MFSK
+    - **startFrequency, spacing** - same as 2tone
+    - **regionSize** - the size of one region (in number of frequencies) - must be a power of 2
+    - **numRegions** - the number of regions to use
+
+## Testing
+
+To test your setup you can run one of 3 tests:
+- `sound-auth test tx` - transmits 8 chunks of data (on android there is a button in app)
+- `sound-auth test rx` - receives 8 chunks of data and prints out bit accuracy (on android there is a button in app)
+- `sound-auth test auth` - tests the whole authentication process (the devices must be paired first)
 
 ## Protocol
 
-Every device has some sort of "address", which is 2 bytes long. Messages received with wrong address wont be processed. An address of `0` means broadcast. After destination address we need to specify the type of the message, which would be 1 byte. So the message format is `[destination][source][type][data]`
+Every device has some sort of "address", which is 2 bytes long. Messages received with wrong address wont be processed. An address of `0` means broadcast. After destination address we need to specify the type of the message, which would be 1 byte. So the message format is `[destination][source][type][data][crc]`. The CRC 
+at the end is optional checksum of the whole message.
 
 ### Setup
 
-Setup message is used to transfer the address of a computer to the phone. It can be intercepted, so you must ensure that no one listens to it while the transfer is happening. The data format is: `[user]@[computer address][device name]:[secret]`. The type of this message is `0x01`
-- The `[user]` is the unix user of the computer for whom the
-- `[computer address]` is the address of the computer that the phone should send the data to
-- `[device name]` - user friendly name of the device (hostname)
-- `[secret]` - secret key that is used to generate one time passwords
+Setup message broadcasted to transfer the credentials of a computer to the phone. The data format is: `[user]@[device_name]:[public_key]`. The type of this message is `0x01`
+- The `[user]` is the unix user of the computer for whom the auth is being set up
+- `[device_name]` - user friendly name of the device (hostname)
+- `[public_key]` - public key of the computer
 
-Phone should answer to this message with its address if he saved the secret successfully
+Phone should answer to this message with its public key, but only when CRC checksum is correct so that both can
+derive a shared secret used for authentication.
 
 ### Authentication
 

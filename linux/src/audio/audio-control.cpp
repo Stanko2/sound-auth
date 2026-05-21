@@ -327,11 +327,11 @@ void AudioControl::registry_event(void *data, uint32_t id, uint32_t permissions,
 
   if (strcmp(media_class, "Audio/Sink") == 0) {
     a->playback_devices.insert({node_name, id});
-    std::cout << "New playback device" << std::endl;
+    // std::cout << "New playback device" << std::endl;
     // std::cout << "[Playback] ";
   } else if (strcmp(media_class, "Audio/Source") == 0) {
     a->capture_devices.insert({node_name, id});
-    std::cout << "New capture device" << std::endl;
+    // std::cout << "New capture device" << std::endl;
     // std::cout << "[Capture] ";
   } else {
     return;

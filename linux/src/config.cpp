@@ -1,17 +1,17 @@
 #include "config.h"
-#include "ggwave/ggwave.h"
 #include "toml/toml.hpp"
 #include "util.cpp"
-#include <SDL2/SDL_audio.h>
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
 #include <openssl/rand.h>
 #include <ostream>
-#include <string>
-#include <vector>
 #include <regex>
+#include <string>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <vector>
 
 AuthConfig::AuthConfig() {
   m_configFile = "";
@@ -33,20 +33,93 @@ AuthConfig::AuthConfig() {
     }
   }
 
+  if (seteuid(0) == -1) {
+    std::cerr << "error reading credentials" << std::endl;
+  }
+
+  FILE* credFile = fopen(CREDENTIAL_FILE, "r");
+  if(credFile) {
+    std::cout << "credential file loaded" << std::endl;
+    try {
+      m_credentials = toml::parse_file(CREDENTIAL_FILE);
+    } catch (const toml::parse_error &err) {
+      std::cerr << "Error in credential file, deleting it" << std::endl;
+      remove(CREDENTIAL_FILE);
+    }
+
+    fclose(credFile);
+  }
+
   if (m_configFile.empty()) {
     std::cerr << "No config file found" << std::endl;
   }
+  seteuid(getuid());
 }
 
-void AuthConfig::saveConfig() {
-  std::ofstream file(m_configFile,
+void AuthConfig::saveCredentials() {
+  // if (geteuid() != 0) {
+  //   std::cerr << "Setting credentials should be done as root" << std::endl;
+  //   return;
+  // }
+
+  if (seteuid(0) == -1) {
+    std::cerr << "error writing to credentials file" << std::endl;
+    return;
+  }
+
+  if (mkdir(CREDENTIAL_FOLDER, 0700) == -1) {
+    if (errno != EEXIST) {
+      std::cerr << "Failed to create directory: " << CREDENTIAL_FOLDER
+                << " (Error: " << strerror(errno) << ")" << std::endl;
+      return;
+    }
+  }
+  std::ofstream file(CREDENTIAL_FILE,
                      std::ios::out | std::ios::binary | std::ios::trunc);
 
   if (file.is_open()) {
-    file << m_config;
+    file << m_credentials;
     file.close();
+
+    chmod(CREDENTIAL_FILE, S_IRUSR | S_IWUSR);
   } else {
-    std::cerr << "Could not write config: " << std::endl;
+    std::cerr << "Could not write config to " << CREDENTIAL_FILE << std::endl;
+  }
+
+  seteuid(getuid());
+}
+
+void updateAddressIfEmpty(const std::string &filePath,
+                          const std::string &newAddress) {
+  std::ifstream inFile(filePath);
+  if (!inFile.is_open()) {
+    std::cerr << "Failed to open file for reading: " << filePath << std::endl;
+    return;
+  }
+
+  std::stringstream buffer;
+  buffer << inFile.rdbuf();
+  inFile.close();
+  std::string fileContent = buffer.str();
+
+  std::regex addressRegex(R"(^\s*address\s*=\s*(['"])(['"])\s*$)");
+  std::smatch match;
+  std::regex searchRegex(R"((^\s*address\s*=\s*)(['"])(['"])(\s*$))",
+                         std::regex_constants::multiline);
+
+  if (std::regex_search(fileContent, match, searchRegex)) {
+    std::cout << "Empty address field found. Updating..." << std::endl;
+
+    std::string replacement = "$1'" + newAddress + "'$4";
+    std::string updatedContent =
+        std::regex_replace(fileContent, searchRegex, replacement);
+    std::ofstream outFile(filePath, std::ios::out | std::ios::trunc);
+    if (outFile.is_open()) {
+      outFile << updatedContent;
+      outFile.close();
+    } else {
+      std::cerr << "Failed to open file for writing: " << filePath << std::endl;
+    }
   }
 }
 
@@ -57,7 +130,8 @@ const std::vector<uint8_t> AuthConfig::getAddress() {
     std::vector<uint8_t> b(2);
     RAND_bytes(b.data(), 2);
     address = vectorToHexString(b);
-    setSetting("address", address);
+    m_config.insert_or_assign("address", address);
+    updateAddressIfEmpty(m_configFile, address);
   }
 
   assert(address.length() == 4);
@@ -76,28 +150,6 @@ std::string AuthConfig::getCaptureDeviceName() const {
   return device;
 }
 
-ggwave_ProtocolId AuthConfig::getProtocol() const {
-  std::string protocol;
-  lookupStr("protocol", protocol, "ultrasound_fastest");
-
-  if (protocol == "ultrasound_fastest") {
-    return GGWAVE_PROTOCOL_ULTRASOUND_FASTEST;
-  } else if (protocol == "ultrasound_fast") {
-    return GGWAVE_PROTOCOL_ULTRASOUND_FAST;
-  } else if (protocol == "ultrasound_normal") {
-    return GGWAVE_PROTOCOL_ULTRASOUND_NORMAL;
-  } else if (protocol == "audible_normal") {
-    return GGWAVE_PROTOCOL_AUDIBLE_NORMAL;
-  } else if (protocol == "audible_fast") {
-    return GGWAVE_PROTOCOL_AUDIBLE_FAST;
-  } else if (protocol == "audible_fastest") {
-    return GGWAVE_PROTOCOL_AUDIBLE_FASTEST;
-  }
-
-  std::cerr << "Invalid protocol: " << protocol << std::endl;
-  return GGWAVE_PROTOCOL_ULTRASOUND_FASTEST;
-}
-
 AuthConfig::~AuthConfig() {
   // if (m_config != NULL) {
   //     delete m_config;
@@ -106,110 +158,15 @@ AuthConfig::~AuthConfig() {
 
 void AuthConfig::lookupStr(const char *path, std::string &output,
                            const std::string &defaultValue) const {
-  auto node = m_config.at_path(path);
+
+  auto node = m_credentials.at_path(path);
+  if (node.is_string()) {
+    output = node.value_or(defaultValue);
+    return;
+  }
+  node = m_config.at_path(path);
 
   output = node.value_or(defaultValue);
-}
-
-void AuthConfig::setSetting(const char *path, const std::string &value) {
-  std::ifstream inFile(m_configFile);
-  if (!inFile.is_open())
-    return;
-
-  std::stringstream buffer;
-  buffer << inFile.rdbuf();
-  std::string content = buffer.str();
-  inFile.close();
-
-  // Split path
-  std::string pathStr(path);
-  std::vector<std::string> parts;
-
-  size_t start = 0;
-  size_t end;
-
-  while ((end = pathStr.find('.', start)) != std::string::npos) {
-    parts.push_back(pathStr.substr(start, end - start));
-    start = end + 1;
-  }
-
-  parts.push_back(pathStr.substr(start));
-
-  // Build section name
-  std::string section;
-  for (size_t i = 0; i + 1 < parts.size(); ++i) {
-    if (!section.empty())
-      section += ".";
-
-    section += parts[i];
-  }
-
-  const std::string key = parts.back();
-
-  std::stringstream input(content);
-  std::stringstream output;
-
-  std::string line;
-
-  bool inTargetSection = section.empty();
-  bool sectionFound = section.empty();
-  bool keyUpdated = false;
-
-  std::regex sectionRegex(R"(^\s*\[(.+)\]\s*$)");
-  std::regex keyRegex("^\\s*" + key + R"(\\s*=\\s*.*$)");
-
-  while (std::getline(input, line)) {
-    std::smatch match;
-
-    // Detect section
-    if (std::regex_match(line, match, sectionRegex)) {
-      std::string currentSection = match[1];
-
-      // Leaving target section without finding key
-      if (inTargetSection && !keyUpdated) {
-        output << key << " = \"" << value << "\"\n";
-        keyUpdated = true;
-      }
-
-      inTargetSection = (currentSection == section);
-
-      if (inTargetSection)
-        sectionFound = true;
-    }
-
-    // Replace key inside target section
-    if (inTargetSection && std::regex_search(line, keyRegex)) {
-      // Preserve inline comment
-      std::string comment;
-
-      auto commentPos = line.find('#');
-      if (commentPos != std::string::npos)
-        comment = " " + line.substr(commentPos);
-
-      output << key << " = \"" << value << "\"" << comment << "\n";
-
-      keyUpdated = true;
-    } else {
-      output << line << "\n";
-    }
-  }
-
-  // Append key if section exists but key missing
-  if (sectionFound && !keyUpdated) {
-    output << key << " = \"" << value << "\"\n";
-  }
-
-  // Append section + key if section missing
-  if (!sectionFound) {
-    output << "\n[" << section << "]\n";
-    output << key << " = \"" << value << "\"\n";
-  }
-
-  std::ofstream outFile(m_configFile, std::ios::out | std::ios::trunc);
-
-  if (outFile.is_open()) {
-    outFile << output.str();
-  }
 }
 
 std::vector<uint8_t> AuthConfig::getSecretKey(std::string user) const {
@@ -223,7 +180,11 @@ void AuthConfig::setSecretKey(std::string user,
                               const std::vector<uint8_t> &key) {
   std::string path = user + ".key";
   std::string hexKey = vectorToHexString(key);
-  setSetting(path.c_str(), hexKey);
+  if (!m_credentials[user].is_table()) {
+    m_credentials.insert_or_assign(user, toml::table{});
+  }
+  m_credentials[user].as_table()->insert_or_assign("key", hexKey);
+  saveCredentials();
 }
 
 void AuthConfig::setAddress(std::string user,
@@ -231,7 +192,13 @@ void AuthConfig::setAddress(std::string user,
   assert(address.size() == 2);
   std::string path = user + ".address";
   std::string hexAddr = vectorToHexString(address);
-  setSetting(path.c_str(), hexAddr);
+
+  if (!m_credentials[user].is_table()) {
+    m_credentials.insert_or_assign(user, toml::table{});
+  }
+
+  m_credentials[user].as_table()->insert_or_assign("address", hexAddr);
+  saveCredentials();
 }
 
 std::vector<uint8_t> AuthConfig::GetPhoneAddress(std::string user) const {
