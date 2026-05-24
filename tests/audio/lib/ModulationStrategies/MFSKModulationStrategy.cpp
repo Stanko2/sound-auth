@@ -4,8 +4,8 @@
 #include <ostream>
 #include <string>
 #include <vector>
-#include <cmath>    // Required for log2
-#include <iostream> // Required for std::cerr
+#include <cmath>
+#include <iostream>
 
 MFSKModulationStrategy::MFSKModulationStrategy(ProtocolConfig* p, int start_freq, int freq_spacing,
                                                int M, int num_regions) {

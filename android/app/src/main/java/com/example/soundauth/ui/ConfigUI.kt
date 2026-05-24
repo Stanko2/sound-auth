@@ -19,6 +19,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +42,8 @@ fun SoundConfigScreen(prefs: AppPrefs) {
         NumericField("FFT Size", prefs.fftSize) { prefs.fftSize = it }
         NumericField("Marker F1", prefs.markerF1) { prefs.markerF1 = it }
         NumericField("Marker F2", prefs.markerF2) { prefs.markerF2 = it }
+        NumericField("Lowest Strength", prefs.lowestStr) { prefs.lowestStr = it }
+        NumericField("Strength Threshold", prefs.strengthThresh) { prefs.strengthThresh = it }
         NumericField("Message chunk size", prefs.chunkSize) { prefs.chunkSize = it }
 
         HorizontalDivider(
@@ -101,7 +104,7 @@ fun SoundConfigScreen(prefs: AppPrefs) {
 @Composable
 fun <T> NumericField(label: String, value: T, onUpdate: (T) -> Unit) {
     var text by remember(value) { mutableStateOf(value.toString()) }
-    OutlinedTextField(
+    TextField(
         value = text,
         onValueChange = {
             text = it

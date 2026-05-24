@@ -10,15 +10,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -27,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -116,31 +124,38 @@ class SoundTestingScreen() {
         ) { isGranted: Boolean ->
             hasRecordAudioPermission = isGranted
         }
+        var isRecording by remember { mutableStateOf(false) }
+        var playInput by remember { mutableStateOf("17000|15000|0|17000") }
+        var msg by remember { mutableStateOf("") }
 
+        fun startRecording() {
+            if (!hasRecordAudioPermission) {
+                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                return
+            }
+
+            isRecording = true
+            SoundTransferWrapper.instance.launch(appPrefs)
+        }
+
+        fun stopRecording() {
+            isRecording = false
+            SoundTransferWrapper.instance.closeStreams()
+        }
+
+        fun startPlaying() {
+            PlayFrequencies(playInput)
+        }
+
+        DisposableEffect(Unit) {
+            onDispose {
+                if (isRecording){
+                    stopRecording()
+                }
+            }
+        }
 
         if (path == "Test") {
-            var isRecording by remember { mutableStateOf(false) }
-            var playInput by remember { mutableStateOf("17000|15000|0|17000") }
-            var msg by remember { mutableStateOf("") }
-
-            fun startRecording() {
-                if (!hasRecordAudioPermission) {
-                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    return
-                }
-
-                isRecording = true
-                SoundTransferWrapper.instance.launch(appPrefs)
-            }
-
-            fun stopRecording() {
-                isRecording = false
-                SoundTransferWrapper.instance.closeStreams()
-            }
-
-            fun startPlaying() {
-                PlayFrequencies(playInput)
-            }
 
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -161,7 +176,7 @@ class SoundTestingScreen() {
                             startRecording()
                         }
                     }) {
-                        Text(if (isRecording) "Stop Recording" else "Start Recording")
+                        Text(if (isRecording) "Close streams" else "Open streams")
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Button(onClick = {
@@ -177,15 +192,15 @@ class SoundTestingScreen() {
                     }
                 }
 
-                Text(msg.toBitString())
-                TestControls()
+//                Text(msg.toBitString())
+                HorizontalDivider(modifier = Modifier.padding(4.dp))
+                TestControls(isRecording)
 
 
                 logger.UI()
             }
         } else if (path == "Configuration") {
             Column(modifier = Modifier.fillMaxSize().padding(top = 40.dp)) {
-
                 SoundConfigScreen(appPrefs)
             }
         }
@@ -193,54 +208,71 @@ class SoundTestingScreen() {
 
     external fun PlayFrequencies(data: String)
 
-    external fun testTx()
-    external fun testRx()
+    external fun testTx(numMessages: Int)
+    external fun testRx(numMessages: Int)
 
     @Composable
-    fun TestControls() {
+    fun TestControls(isRunning: Boolean) {
         // 1. Create a scope for the clicks
         val scope = rememberCoroutineScope()
 
         // 2. State to track if a process is running
         var isProcessing by remember { mutableStateOf(false) }
+        val pattern = remember { Regex("^\\d+$") }
+        var text by remember { mutableStateOf("8") }
+        var numMessages by remember { mutableIntStateOf(8) }
 
-        Row {
-            Button(
-                onClick = {
-                    if (!isProcessing) {
-                        isProcessing = true
-                        scope.launch(Dispatchers.IO) {
-                            try {
-                                testTx() // Your blocking call
-                            } finally {
-                                isProcessing = false // Reset state when done
-                            }
-                        }
+        Column (modifier = Modifier.fillMaxWidth()) {
+
+            TextField(
+                label =  { Text("Number of messages") },
+                value = text,
+                onValueChange = {
+                    text = it
+                    if (it.matches(pattern)) {
+                        numMessages = text.toInt()
                     }
                 },
-                enabled = !isProcessing // Disable button while working
-            ) {
-                Text(if (isProcessing) "Sending..." else "Send test messages")
-            }
-
-            Spacer(Modifier.width(8.dp))
-
-            Button(
-                onClick = {
-                    if (!isProcessing) {
-                        isProcessing = true
-                        scope.launch(Dispatchers.IO) {
-                            try {
-                                testRx() // Your blocking call
-                            } finally {
-                                isProcessing = false
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+            Row {
+                Button(
+                    onClick = {
+                        if (!isProcessing) {
+                            isProcessing = true
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    testTx(numMessages) // Your blocking call
+                                } finally {
+                                    isProcessing = false // Reset state when done
+                                }
                             }
                         }
-                    }
-                },
-                enabled = !isProcessing
-            ) {
-                Text(if (isProcessing) "Receiving..." else "Receive test messages")
+                    },
+                    enabled = !isProcessing // Disable button while working
+                ) {
+                    Text(if (isProcessing) "Sending..." else "Send test messages")
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                Button(
+                    onClick = {
+                        if (!isProcessing) {
+                            isProcessing = true
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    testRx(numMessages) // Your blocking call
+                                } finally {
+                                    isProcessing = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = !isProcessing
+                ) {
+                    Text(if (isProcessing) "Receiving..." else "Receive test messages")
+                }
             }
         }
     }

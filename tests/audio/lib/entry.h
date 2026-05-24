@@ -8,6 +8,13 @@
 #include <thread>
 #include <vector>
 
+enum LogLevel {
+  all = 3,
+  info = 2,
+  warning = 1,
+  error = 0
+};
+
 class SoundTransfer {
 private:
   SignalModulation* sm;
@@ -25,6 +32,7 @@ private:
   std::queue<uint8_t> data_buffer;
 
 public:
+  static LogLevel LOG_LEVEL;
   SoundTransfer(ModulationStrategy* strategy, ProtocolConfig* p);
 
   Ringbuffer<float>* get_input_buffer() {

@@ -91,6 +91,9 @@ class MainActivity : ComponentActivity() {
                                 Screen.Main -> Screen.SoundTest
                                 Screen.SoundTest -> Screen.Main
                             }
+                            if (currentScreen == Screen.SoundTest) {
+                                stopService(Intent(this, ListenService::class.java))
+                            }
                         }
                     },
                 ) { innerPadding ->

@@ -2,6 +2,7 @@
 #include "../sound-transfer-lib/RingBuffer.h"
 #include "communication.h"
 #include "spa/pod/pod.h"
+#include <string>
 #include <atomic>
 #include <cstdint>
 #include <pipewire/pipewire.h>

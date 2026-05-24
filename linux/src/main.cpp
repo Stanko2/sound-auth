@@ -4,6 +4,7 @@
 #include "pam/otp.cpp"
 #include "config.h"
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -23,8 +24,8 @@ void help() {
     std::cout << "  send [FILE] sends the [FILE] to all devices" << std::endl;
     std::cout << "  setup       generates keys and broadcasts them." << std::endl;
     std::cout << "  test auth   tries to run whole authentication process for current user" << std::endl;
-    std::cout << "  test tx     transmits test messages" << std::endl;
-    std::cout << "  test rx     listens for test messages and prints bit accuracy" << std::endl;
+    std::cout << "  test tx [n] transmits [n] test messages" << std::endl;
+    std::cout << "  test rx [n] listens for [n] test messages and prints bit accuracy" << std::endl;
 }
 
 int main(int argc, char** argv) {
@@ -62,13 +63,17 @@ int main(int argc, char** argv) {
             a->listAllDevices();
         } else if (strncmp(argv[1], "test", 10) == 0) {
           if (argc < 3) return -1;
+          int count = 8;
+          if (argc >= 4) {
+            count = atoi(argv[3]);
+          }
           if (strncmp(argv[2], "auth", 10) == 0) {
               bool r = runAuth(c);
               ret = !r;
           } else if (strncmp(argv[2], "tx", 10) == 0) {
-            test_tx(c->get_transfer(), 8);
+            test_tx(c->get_transfer(), count);
           } else if (strncmp(argv[2], "rx", 10) == 0) {
-            test_rx(c->get_transfer(), 8);
+            test_rx(c->get_transfer(), count);
           }
         }
 

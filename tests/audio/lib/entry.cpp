@@ -13,6 +13,8 @@
 #include <thread>
 #include <vector>
 
+LogLevel SoundTransfer::LOG_LEVEL = LogLevel::warning;
+
 SoundTransfer::SoundTransfer(ModulationStrategy *strategy, ProtocolConfig *p) {
   this->p = p;
   this->strategy = strategy;

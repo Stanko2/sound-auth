@@ -83,6 +83,7 @@ Java_com_example_soundauth_SoundTransferWrapper_openStreams(
     p->lowest_strength = lowest_strength;
     p->strength_threshold = strength_threshold;
     p->max_message_length = chunk_size;
+    SoundTransfer::LOG_LEVEL = LogLevel::warning;
 
     // 2. Parse Modulation Type
     const char *type_ptr = env->GetStringUTFChars(modulation_type, nullptr);
@@ -129,16 +130,16 @@ Java_com_example_soundauth_SoundTransferWrapper_send(JNIEnv *env, jobject thiz,
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_example_soundauth_ui_SoundTestingScreen_testTx(JNIEnv *env, jobject thiz) {
+Java_com_example_soundauth_ui_SoundTestingScreen_testTx(JNIEnv *env, jobject thiz, jint numMessages) {
     if (sound_transfer == nullptr) return;
-    test_tx(sound_transfer, 8);
+    test_tx(sound_transfer, numMessages);
 }
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_example_soundauth_ui_SoundTestingScreen_testRx(JNIEnv *env, jobject thiz) {
+Java_com_example_soundauth_ui_SoundTestingScreen_testRx(JNIEnv *env, jobject thiz, jint numMessages) {
     if (sound_transfer == nullptr) return;
-    test_rx(sound_transfer, 8);
+    test_rx(sound_transfer, numMessages);
 }
 extern "C"
 JNIEXPORT jbyteArray JNICALL

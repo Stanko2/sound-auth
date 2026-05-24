@@ -4,9 +4,8 @@
 
 #ifndef SOUND_AUTH_RINGBUFFER_H
 #define SOUND_AUTH_RINGBUFFER_H
-#include <iostream>
-#include <stdexcept>
 #include <mutex>
+#include <sys/types.h>
 #include <vector>
 
 template <class T>

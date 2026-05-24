@@ -1,6 +1,7 @@
 #include "../modulation.h"
 #include "modulationStrategy.h"
 #include "../waveforms.h"
+#include "../entry.h"
 #include <cassert>
 #include <cstddef>
 #include <string>
@@ -49,10 +50,12 @@ std::vector<bool> TwoTonePerBitModulationStrategy::demodulate(int offset) {
   Spectrum *s = sm->get_spectrum(offset);
   std::vector<bool> out(frequencies.size() / 2);
 
-  // for (int i = 0; i < frequencies.size(); i++) {
-  //   std::cout << s->strength(frequencies[i]) << " ";
-  // }
-  // std::cout << std::endl;
+  if (SoundTransfer::LOG_LEVEL >= LogLevel::info) {
+    for (int i = 0; i < frequencies.size(); i++) {
+      std::cout << s->strength(frequencies[i]) << " ";
+    }
+    std::cout << std::endl;
+  }
 
   for (int i = 0; i < out.size(); i++) {
     out[i] =

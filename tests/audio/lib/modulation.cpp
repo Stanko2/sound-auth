@@ -7,12 +7,12 @@
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
-#include <iomanip>
 #include <ios>
 #include <iostream>
 #include <mutex>
 #include <ostream>
 #include <string>
+#include "entry.h"
 #include <vector>
 
 SignalModulation::SignalModulation(const ProtocolConfig &p) {
@@ -20,11 +20,15 @@ SignalModulation::SignalModulation(const ProtocolConfig &p) {
   recorder_state = idle;
   waveforms = new Waveforms(10 * p.N, p.N, new GaussianWindow(p.N, 4.5));
   waveforms->addFilter((Filter *)new CombFilter(p.sample_rate, 200, 0));
-  marker_file.open("test-data/marker", std::ios_base::app | std::ios::out);
-  message_file.open("test-data/message", std::ios_base::app | std::ios::out);
-  if (!message_file.is_open()) {
-    // std::cerr << "Failed to open message log file. Please create directory "
-    //              "'test-data'\n";
+
+  if (SoundTransfer::LOG_LEVEL >= LogLevel::all) {
+    marker_file.open("test-data/marker", std::ios_base::app | std::ios::out);
+    message_file.open("test-data/message", std::ios_base::app | std::ios::out);
+    if (!message_file.is_open()) {
+      // std::cerr << "Failed to open message log file. Please create directory "
+      //              "'test-data'\n";
+    }
+
   }
 }
 
@@ -79,23 +83,35 @@ int SignalModulation::detect_begin() {
   int offset_max_df2 = 0;
 
   std::fstream data;
-  data.open("marker_data.csv", std::ios::out);
-  data << "offset,F1,F2,noise,df1,df2" << std::endl;
-  std::cout << "Detected start marker" << std::endl;
+  if (SoundTransfer::LOG_LEVEL >= LogLevel::all) {
+    data.open("marker_data.csv", std::ios::out);
+    data << "offset,F1,F2,noise,df1,df2" << std::endl;
+  }
+
+  if (SoundTransfer::LOG_LEVEL >= LogLevel::warning) {
+    std::cout << "Detected start marker" << std::endl;
+  }
+
   Spectrum *s = nullptr;
   Spectrum *last = nullptr;
   const int offset_step = 5;
   for (int offset = 0; offset < 3 * p.N; offset += offset_step) {
     s = get_spectrum(p.N + offset);
     float noise = get_noise(s);
-    data << offset << "," << s->strength(p.f1) << "," << s->strength(p.f2)
-         << "," << noise << ",";
+    if (SoundTransfer::LOG_LEVEL >= LogLevel::all) {
+      data << offset << "," << s->strength(p.f1) << "," << s->strength(p.f2)
+          << "," << noise << ",";
+    }
+
     if (last != nullptr) {
       float df1 = (s->strength(p.f1) - last->strength(p.f1)) * p.sample_rate /
                   (float)offset_step;
       float df2 = (s->strength(p.f2) - last->strength(p.f2)) * p.sample_rate /
                   (float)offset_step;
-      data << df1 << "," << df2 << std::endl;
+      if (SoundTransfer::LOG_LEVEL >= LogLevel::all) {
+        data << df1 << "," << df2 << std::endl;
+      }
+
       if (df1 > max_df1) {
         max_df1 = df1;
         offset_max_df1 = offset;
@@ -106,7 +122,9 @@ int SignalModulation::detect_begin() {
         offset_max_df2 = offset;
       }
     } else {
-      data << "0,0" << std::endl;
+      if(SoundTransfer::LOG_LEVEL >= LogLevel::all) {
+        data << "0,0" << std::endl;
+      }
     }
 
     if (s->mag(p.f1) > max_mag) {
@@ -121,22 +139,31 @@ int SignalModulation::detect_begin() {
   float last_mag_f1 = 0;
   float last_mag_f2 = 0;
   int offset_derivative = (offset_max_df1 + offset_max_df2) / 2;
-  std::cout << "after correction mag: " << best_offset_mag << std::endl;
+  if (SoundTransfer::LOG_LEVEL >= LogLevel::info)  {
+    std::cout << "after correction mag: " << best_offset_mag << std::endl;
+  }
   for (int i = 0; i < marker.size(); i++) {
     Spectrum *s = get_spectrum(best_offset_mag + p.N * (i - 2));
-    std::cout << i << ". frame: F1:" << s->mag(p.f1) << " - " << s->phase(p.f1);
-    std::cout << " F2: " << s->mag(p.f2) << " - " << s->phase(p.f2)
-              << std::endl;
+    if (SoundTransfer::LOG_LEVEL >= LogLevel::info)  {
+      std::cout << i << ". frame: F1:" << s->mag(p.f1) << " - " << s->phase(p.f1);
+      std::cout << " F2: " << s->mag(p.f2) << " - " << s->phase(p.f2)
+                << std::endl;
+    }
     delete s;
   }
-  std::cout << "offset F1: " << offset_max_df1
-            << " offset F2: " << offset_max_df2
-            << " calculated offset: " << offset_derivative << std::endl;
+
+  if (SoundTransfer::LOG_LEVEL >= LogLevel::info)  {
+    std::cout << "offset F1: " << offset_max_df1
+              << " offset F2: " << offset_max_df2
+              << " calculated offset: " << offset_derivative << std::endl;
+  }
   for (int i = 0; i < marker.size(); i++) {
     Spectrum *s = get_spectrum(offset_derivative + p.N * (i - 1));
-    std::cout << i << ". frame: F1:" << s->mag(p.f1) << " - " << s->phase(p.f1);
-    std::cout << " F2: " << s->mag(p.f2) << " - " << s->phase(p.f2)
-              << std::endl;
+    if (SoundTransfer::LOG_LEVEL >= LogLevel::info)  {
+      std::cout << i << ". frame: F1:" << s->mag(p.f1) << " - " << s->phase(p.f1);
+      std::cout << " F2: " << s->mag(p.f2) << " - " << s->phase(p.f2)
+                << std::endl;
+    }
     delete s;
   }
 
@@ -144,15 +171,21 @@ int SignalModulation::detect_begin() {
 
   const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
       sync_stop - sync_begin);
-  std::cout << "synchronization took: " << duration.count() << "ms"
-            << std::endl;
+  if (SoundTransfer::LOG_LEVEL >= LogLevel::warning)  {
+    std::cout << "synchronization took: " << duration.count() << "ms"
+              << std::endl;
+  }
 
   data.close();
   if (abs((offset_max_df1 - offset_max_df2) - p.N) < 0.2 * p.N) {
-    std::cout << "using max derivative synchronization" << std::endl;
+    if (SoundTransfer::LOG_LEVEL >= LogLevel::info) {
+      std::cout << "using max derivative synchronization" << std::endl;
+    }
     return offset_derivative;
   } else {
-    std::cout << "using max magnitude synchronization" << std::endl;
+    if (SoundTransfer::LOG_LEVEL >= LogLevel::warning) {
+      std::cout << "using fallback max magnitude synchronization" << std::endl;
+    }
     return best_offset_mag - p.N;
   }
 }
@@ -249,7 +282,9 @@ void SignalModulation::transmit_data(std::vector<uint8_t> &data) {
     assert(strategy != nullptr);
 
     std::string freq_string = marker + strategy->modulate(tx_buffer);
-    std::cout << "MSG string: " << freq_string << std::endl;
+    if (SoundTransfer::LOG_LEVEL >= LogLevel::info) {
+      std::cout << "MSG string: " << freq_string << std::endl;
+    }
     // assert(tx_callback != nullptr);
     to_transmit = waveforms->getWaveform(freq_string, p.N, p.sample_rate);
 

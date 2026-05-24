@@ -24,6 +24,7 @@ Communication::Communication(AudioControl *audio, const uint8_t address[2]) {
 Communication::~Communication() { delete transfer; }
 
 void Communication::init_transfer() {
+  SoundTransfer::LOG_LEVEL = LogLevel::warning;
   auto config = AuthConfig::instance().getConfig();
   auto protocolConfig = config["Protocol"].is_table()
                             ? *config["Protocol"].as_table()
